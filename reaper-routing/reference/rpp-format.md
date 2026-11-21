@@ -51,7 +51,7 @@ offsets), `GetMediaItem_Track`, `GetSetMediaTrackInfo_String` (`P_NAME`), `GetMe
 (`IP_TRACKNUMBER`), `ShowMessageBox` (type 4 = Yes/No, 6 = Yes), `Undo_BeginBlock`, `Undo_EndBlock`,
 `DeleteTrackMediaItem`, `UpdateArrange`, `defer`, `atexit`, `time_precise`, `CountTakes`, `GetTake` (0-based),
 `GetProjectStateChangeCount`, `EnumProjects`, `GetMediaSourceParent` (parent of a section or reversed source, nil
-for a root source), `GetMediaItemInfo_Value` (`D_POSITION`), `format_timestr`. Window (same page, Lua built-ins): `gfx.init`,
+for a root source), `GetMediaItemInfo_Value` (`D_POSITION`), `format_timestr`, `ValidatePtr2` (`MediaItem_Take*`). Window (same page, Lua built-ins): `gfx.init`,
 `gfx.quit`, `gfx.update`, `gfx.getchar` (-1 = window closed, 27 = Esc), `gfx.set`, `gfx.rect`, `gfx.drawstr`,
 `gfx.measurestr` (returns w, h), `gfx.setfont`, and the variables `gfx.x`, `gfx.y`, `gfx.w`, `gfx.h`, `gfx.mouse_x`,
 `gfx.mouse_y`, `gfx.mouse_cap` (1 = left button), `gfx.mouse_wheel` (the script resets it to 0).
@@ -66,7 +66,8 @@ for a root source), `GetMediaItemInfo_Value` (`D_POSITION`), `format_timestr`. W
   takes listed and removed, no missing-file message on reopening.
 - Only single-take items are candidates: `DeleteTrackMediaItem` removes the whole item, so an item with more takes
   is skipped. A file that `io.open` can't open counts as missing only for `ENOENT` (2); other errors skip the take.
-  Remove refuses when `EnumProjects(-1)` or `GetProjectStateChangeCount` differ from the scan. Every candidate has
+  Remove refuses when `EnumProjects(-1)` or `GetProjectStateChangeCount` differ from the scan. Each scan step
+  stops if another project became active and skips a take `ValidatePtr2` no longer accepts (its item deleted). Every candidate has
   its own checkbox, ticked by default. **Unconfirmed** in REAPER (added after the runs below).
 - File names come from the parent source when there is one (`GetMediaSourceParent`), so section and reversed
   takes resolve to their WAV file.

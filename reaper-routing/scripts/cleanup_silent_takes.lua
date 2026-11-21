@@ -121,10 +121,21 @@ local delete_files, scroll, result = false, 0, {}
 local prev_down, clicked = false, false
 
 local function scan()
+  if reaper.EnumProjects(-1) ~= proj then
+    local t = takes[idx]
+    if t then finish(t) end
+    result = { "Another project was opened during the scan, so nothing was removed.", "Run the cleanup again." }
+    state = "done"
+    return
+  end
   local t0 = reaper.time_precise()
   while state == "scan" and reaper.time_precise() - t0 < SLICE do
     local t = takes[idx]
-    if not t.started then start(t) end
+    if not reaper.ValidatePtr2(proj, t.take, "MediaItem_Take*") then
+      if t.acc then reaper.DestroyAudioAccessor(t.acc) end
+      t.acc, t.peak, t.done = nil, nil, true
+    end
+    if not t.started and not t.done then start(t) end
     if not t.done then step(t) end
     if t.done then
       if t.peak and t.peak <= limit then

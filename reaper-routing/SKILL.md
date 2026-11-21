@@ -59,6 +59,15 @@ saves disk (24-bit / 48 kHz mono is about 8.6 MB per minute per track). With `--
 tracks LV1 doesn't feed; suggest those. Apply the answer with a second run on the routed file into a new name
 (`--disarm 33-40,59-64`) and delete the intermediate file you wrote, so the user ends with one project.
 
+## Routing from inside REAPER
+
+[`scripts/route_tracks.lua`](scripts/route_tracks.lua) does the same routing in a REAPER window, without the
+command line: track range or selected tracks (creating missing tracks), record inputs and hardware outs from a first
+channel (it shows the audio device's channel names and warns past its channel count), master send off, record arm,
+monitoring off, and names from a text file (line N = track N). Unticked options leave tracks as they are; Apply is
+one undo step. To get names from the show, run `python3 scripts/export_names.py show.emo names.txt --device REC-PC`
+(also `.scn`, `.snap`) and pick that file in the window. Load it like the cleanup script below.
+
 ## Cleanup after a recording
 
 Takes that recorded only silence (a spare channel, a player that never started) still take disk space. The

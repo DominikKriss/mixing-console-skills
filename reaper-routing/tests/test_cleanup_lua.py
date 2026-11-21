@@ -3,7 +3,9 @@ import subprocess
 import unittest
 from pathlib import Path
 
-SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "cleanup_silent_takes.lua"
+SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
+SCRIPT = SCRIPTS / "cleanup_silent_takes.lua"
+LUA = sorted(SCRIPTS.glob("*.lua"))
 
 
 class LuaSyntax(unittest.TestCase):
@@ -11,10 +13,11 @@ class LuaSyntax(unittest.TestCase):
         luac = next((shutil.which(c) for c in ("luac", "luac5.4", "luac5.3") if shutil.which(c)), None)
         if not luac:
             self.skipTest("no luac installed")
-        subprocess.run([luac, "-p", str(SCRIPT)], check=True)
+        for script in LUA:
+            subprocess.run([luac, "-p", str(script)], check=True)
 
     def test_uses_only_reaper_calls_listed_in_reference(self):
-        text = SCRIPT.read_text(encoding="utf-8")
+        text = "".join(p.read_text(encoding="utf-8") for p in LUA)
         reference = (SCRIPT.parent.parent / "reference" / "rpp-format.md").read_text(encoding="utf-8")
         import re
         for call in sorted(set(re.findall(r"reaper\.(\w+)", text))):

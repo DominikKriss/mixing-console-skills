@@ -60,7 +60,8 @@ offsets), `GetMediaItem_Track`, `GetSetMediaTrackInfo_String` (`P_NAME`), `GetMe
   threshold (default -80 dBFS). Scanning stops at the first sample above it, so tracks with audio are quick.
 - A take whose file no longer exists (offline in REAPER, e.g. after undoing a removal whose WAVs were deleted) is
   listed as "file missing (offline)" whatever the threshold, and Remove takes it out of the project. Takes with no
-  file name (sources without a file) are left alone. **Unconfirmed** in REAPER.
+  file name (sources without a file) are left alone. Confirmed by the owner in REAPER on Windows (2026-11-21): offline
+  takes listed and removed, no missing-file message on reopening.
 - A file is deleted only when no remaining item uses it. Windows refuses to delete a file REAPER still has open;
   the script then names REAPER's File > Clean current project directory, whose action ID isn't documented, so the
   script doesn't call it.
@@ -69,3 +70,19 @@ offsets), `GetMediaItem_Track`, `GetSetMediaTrackInfo_String` (`P_NAME`), `GetMe
   patch as digital silence and unused stagebox inputs at about -80 dBFS (preamp noise). Window version run by the
   owner the same day: without the checkbox the takes leave the project and the WAVs stay; with it the WAVs are
   deleted from disk while REAPER is open (no Windows file lock seen).
+
+## Routing ReaScript (`scripts/route_tracks.lua`)
+
+Runs inside REAPER: a window with the track range (or selected tracks, optionally creating missing tracks), record
+inputs and hardware outs counted up from a first channel (mono, track channel 1 → out), master send off, record arm,
+monitoring off and a names file (line N = track N; `scripts/export_names.py` writes one from an LV1 / X32 / WING
+show). One undo step. API calls (same page as above): `CountTracks`, `GetTrack`, `InsertTrackAtIndex`,
+`CountSelectedTracks`, `GetSelectedTrack`, `SetMediaTrackInfo_Value` (`I_RECINPUT`, `I_RECARM`, `I_RECMON`,
+`B_MAINSEND`; documented through its Get counterpart), `GetTrackNumSends` / `RemoveTrackSend` (category 1 = hardware
+outputs), `CreateTrackSend` (destination nil = hardware output), `SetTrackSendInfo_Value` (`I_DSTCHAN`,
+`I_SRCCHAN`), `GetUserFileNameForRead`, `PreventUIRefresh`, `TrackList_AdjustWindows`, `GetNumAudioInputs`,
+`GetNumAudioOutputs`, `GetInputChannelName`, `GetOutputChannelName`.
+
+- The new hardware out's index is read back with `GetTrackNumSends` after removing the old ones, not taken from
+  `CreateTrackSend`'s return value.
+- **Unconfirmed:** not yet run in REAPER.

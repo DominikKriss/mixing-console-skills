@@ -238,5 +238,19 @@ class Cli(unittest.TestCase):
         self.assertEqual(rr.ranges([1, 2, 3, 5, 7, 8]), "1-3,5,7-8")
 
 
+class ExportNames(unittest.TestCase):
+    def test_writes_line_per_track(self):
+        import export_names
+        with tempfile.TemporaryDirectory() as d:
+            scn = Path(d) / "s.scn"
+            scn.write_text('/ch/01/config "KICK" 1 RD 1\n/ch/03/config "OH L" 2 YE 2\n', encoding="utf-8")
+            out = Path(d) / "names.txt"
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(export_names.main([str(scn), str(out)]), 0)
+            self.assertEqual(out.read_bytes(), b"KICK\r\n\r\nOH L\r\n")
+            with contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(export_names.main([str(scn), str(out)]), 1)
+
+
 if __name__ == "__main__":
     unittest.main()

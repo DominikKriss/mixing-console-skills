@@ -3,10 +3,10 @@ name: reaper-routing
 description: >-
   Route a REAPER project (.rpp) for live multitrack recording and virtual soundcheck by script: record inputs and
   hardware outputs for every track from range maps (1:1 or offset, mono or stereo pairs), master send on / off,
-  track names from the console show (Waves LV1 .emo, Behringer X32 .scn, WING .snap, or a text list), and a rec /
-  play switch (armed with no hardware outs, or disarmed with hardware outs). Use when the user asks to route,
+  track names from the console show (Waves LV1 .emo, Behringer X32 .scn, WING .snap, or a text list), record arm
+  and monitoring in one project, and a ReaScript that deletes silent takes after a recording. Use when the user asks to route,
   patch, name or set up REAPER tracks / inputs / outputs, prepare a multitrack recording or virtual soundcheck,
-  or says routing 32 / 64 channels in REAPER by hand is painful.
+  says routing 32 / 64 channels in REAPER by hand is painful, or wants to clean up empty / silent WAV files.
 user_invocable: true
 ---
 
@@ -38,19 +38,36 @@ python3 scripts/route_reaper.py SRC.rpp DEST.rpp [options]
 | `--master off` | master / parent send off, so playback reaches only the hardware outs. `on` turns it back on. |
 | `--names FILE` | track names: `.emo` (LV1 inputs by index), `.scn` (X32 `/ch/NN/config`), `.snap` (WING `ch.N.name`), `.txt` (one per line), `.csv` (first column). Name N goes to track N. |
 | `--device NAME` | with an LV1 `.emo`: name track N after what LV1 patched to channel N of this SoundGrid DAW device (the recording computer, as LV1's device list or its hostname shows it; case and `-` / `_` / spaces ignored). Stereo LV1 channels get ` L` / ` R`; unpatched channels keep their name. Use this whenever the recording went through an LV1 patch. |
-| `--mode rec` | arm every track and remove its hardware outs (no input echo into the console while recording). |
-| `--mode play` | disarm every track; keeps or sets hardware outs (needs `--out` or outs already in the project). |
+| `--arm all` / `--arm 1-40` | record-arm tracks. `--disarm 33-40` disarms (applied after `--arm`). |
+| `--monitor off` | record monitoring off (`on`, `tape` = not when playing), so armed tracks don't echo their input to the hardware outs. |
 | `--only 1-40` | change only these tracks. |
 | `--src-stereo` | mono hardware outs take track channels 1/2 mixed to mono (REAPER's default when routed by hand) instead of channel 1. |
 
-Typical virtual soundcheck setup, then switching back to record:
+## Workflow: one project for recording and virtual soundcheck
+
+Build **one** file: every track armed, input monitoring off, hardware outs 1:1, master off, names. It records as is,
+and the same file plays back to the console for virtual soundcheck (armed tracks with monitoring off play their
+items and don't echo the live input).
 
 ```sh
-python3 scripts/route_reaper.py show.rpp show_play.rpp --in 1-64 --out 1-64 --master off --names show.emo --device REC-PC --mode play
-python3 scripts/route_reaper.py show_play.rpp show_rec.rpp --mode rec
+python3 scripts/route_reaper.py show.rpp show_routed.rpp --in 1-64 --out 1-64 --master off \
+  --names show.emo --device REC-PC --arm all --monitor off
 ```
 
-`--mode rec` drops the hardware outs; to play again, run `--mode play --out ...` on the rec file.
+Then show the user the track sheet and **ask which tracks to disarm**: a disarmed track records no file, which
+saves disk (24-bit / 48 kHz mono is about 8.6 MB per minute per track). With `--device`, the script prints the
+tracks LV1 doesn't feed; suggest those. Apply the answer with a second run on the routed file into a new name
+(`--disarm 33-40,59-64`) and delete the intermediate file you wrote, so the user ends with one project.
+
+## Cleanup after a recording
+
+Takes that recorded only silence (a spare channel, a player that never started) still take disk space. The
+ReaScript [`scripts/cleanup_silent_takes.lua`](scripts/cleanup_silent_takes.lua) cleans them from inside REAPER:
+the user loads it once (Actions > Show action list > New action > Load ReaScript, optionally on a toolbar button
+or key), runs it, sets the threshold (default -80 dBFS) and whether to delete the files, checks the list (track,
+level, size) and confirms. It removes the items in one undo step and deletes the WAV files nothing else uses. Tell
+the user to save the project right after. If Windows keeps a file open, it says so; then save and use File > Clean
+current project directory.
 
 The script prints one row per track (name, input, output, master, armed). Check it with the user against the
 console patch. Without `--device`, names follow the console's channel order and are right only when the

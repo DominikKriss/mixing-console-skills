@@ -87,20 +87,19 @@ class Route(unittest.TestCase):
         new, _, _ = rr.route(project(nl="\n"), master=False)
         self.assertNotIn("\r", new)
 
-    def test_rec_mode_arms_and_removes_outs(self):
-        new, report, _ = rr.route(project(hwout=(1, 2)), mode="rec")
-        self.assertEqual(first(new, 1, "REC").split()[1], "1")
-        self.assertFalse(any(ln.strip().startswith("HWOUT") for ln in new.splitlines()))
-        self.assertEqual(report[0]["out"], "- (rec)")
-
-    def test_play_mode_disarms(self):
-        new, _, _ = rr.route(project(), out_map=rr.parse_map(["1-4"]), mode="play")
-        self.assertEqual(first(new, 4, "REC").split()[1], "0")
+    def test_arm_disarm_monitor_keep_outs(self):
+        arm = {n: True for n in range(1, 5)}
+        arm[3] = False
+        new, report, _ = rr.route(project(hwout=()), out_map=rr.parse_map(["1-4"]), arm=arm, monitor=0)
+        self.assertEqual(first(new, 1, "REC"), "REC 1 0 0 0 0 0 0 0")
+        self.assertEqual(first(new, 3, "REC"), "REC 0 2 0 0 0 0 0 0")
         self.assertEqual(sum(ln.strip().startswith("HWOUT") for ln in new.splitlines()), 4)
+        self.assertEqual([r["armed"] for r in report], [True, True, False, True])
+        self.assertEqual(report[0]["monitor"], "off")
 
-    def test_play_mode_without_outputs_refused(self):
+    def test_arm_past_last_track_refused(self):
         with self.assertRaises(rr.Refuse):
-            rr.route(project(hwout=()), mode="play")
+            rr.route(project(), arm={9: True})
 
     def test_only_limits_tracks(self):
         new, report, _ = rr.route(project(), master=False, only=[2, 3])
@@ -221,7 +220,7 @@ class Cli(unittest.TestCase):
     def test_writes_new_file_and_keeps_source(self):
         before = self.src.read_bytes()
         dst = self.src.with_name("p_play.rpp")
-        code, out, _ = self.run_cli(self.src, dst, "--out", "1-4", "--master", "off", "--mode", "play")
+        code, out, _ = self.run_cli(self.src, dst, "--out", "1-4", "--master", "off", "--arm", "all", "--disarm", "2", "--monitor", "off")
         self.assertEqual(code, 0)
         self.assertEqual(self.src.read_bytes(), before)
         self.assertIn(b"\r\n", dst.read_bytes())
@@ -235,10 +234,8 @@ class Cli(unittest.TestCase):
         dst.write_text("x", encoding="utf-8")
         self.assertEqual(self.run_cli(self.src, dst, "--master", "off")[0], 1)
 
-    def test_rec_with_outputs_refused(self):
-        code, _, err = self.run_cli(self.src, self.src.with_name("x.rpp"), "--mode", "rec", "--out", "1-4")
-        self.assertEqual(code, 1)
-        self.assertIn("rec mode", err)
+    def test_ranges(self):
+        self.assertEqual(rr.ranges([1, 2, 3, 5, 7, 8]), "1-3,5,7-8")
 
 
 if __name__ == "__main__":

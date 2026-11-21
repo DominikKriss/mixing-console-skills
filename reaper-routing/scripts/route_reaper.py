@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Set record inputs, hardware outputs, master send, names and rec / play mode on the tracks of a REAPER .rpp."""
+"""Set record inputs, hardware outputs, master send, names, record arm and monitoring on the tracks of a REAPER .rpp."""
 import argparse
 import json
 import re
@@ -11,6 +11,7 @@ from pathlib import Path
 MONO = 1024
 STEREO_IN = 1024
 MAX_CHANNEL = 1024
+MONITOR = {"off": 0, "on": 1, "tape": 2}
 
 
 class Refuse(Exception):
@@ -160,8 +161,8 @@ def read_tracks(lines):
     return tracks
 
 
-def route(text, *, in_map=None, out_map=None, stereo=(), master=None, names=None, mode=None,
-          src_mono=True, only=None):
+def route(text, *, in_map=None, out_map=None, stereo=(), master=None, names=None, arm=None,
+          monitor=None, src_mono=True, only=None):
     nl = "\r\n" if "\r\n" in text else "\n"
     lines = text.split(nl)
     tracks = read_tracks(lines)
@@ -180,8 +181,9 @@ def route(text, *, in_map=None, out_map=None, stereo=(), master=None, names=None
     selected = set(only) if only else set(range(1, count + 1))
     if max(selected) > count:
         raise Refuse(f"track {max(selected)}: the project has {count} tracks.")
-    if mode == "play" and not out_map and not any("HWOUT" in t.attrs for t in tracks):
-        raise Refuse("play mode needs hardware outputs: give --out or route the outputs first.")
+    for t in arm or {}:
+        if t > count:
+            raise Refuse(f"track {t} to arm / disarm: the project has {count} tracks.")
 
     replace, insert, delete, report = {}, {}, set(), []
     taken_out = {}
@@ -206,14 +208,17 @@ def route(text, *, in_map=None, out_map=None, stereo=(), master=None, names=None
         rec_i, rec = field("REC")
         if in_map and n in in_map:
             rec[2] = str(in_map[n] - 1 + (STEREO_IN if n in stereo else 0))
-        if mode:
-            rec[1] = "1" if mode == "rec" else "0"
-        if (in_map and n in in_map) or mode:
+        if arm and n in arm:
+            rec[1] = "1" if arm[n] else "0"
+        if monitor is not None:
+            rec[3] = str(monitor)
+        if (in_map and n in in_map) or (arm and n in arm) or monitor is not None:
             indent = lines[rec_i][: len(lines[rec_i]) - len(lines[rec_i].lstrip())]
             replace[rec_i] = indent + " ".join(rec)
         inp = int(rec[2])
         row["in"] = "-" if inp < 0 else (f"{(inp & 1023) + 1}/{(inp & 1023) + 2}" if inp & STEREO_IN else str((inp & 1023) + 1))
         row["armed"] = rec[1] == "1"
+        row["monitor"] = {v: k for k, v in MONITOR.items()}.get(int(rec[3]), rec[3])
 
         ms_i, ms = field("MAINSEND")
         if master is not None:
@@ -233,8 +238,7 @@ def route(text, *, in_map=None, out_map=None, stereo=(), master=None, names=None
                 dst_field, src_field, label = dst | MONO, (MONO if src_mono else 0), str(dst + 1)
             indent = lines[ms_i][: len(lines[ms_i]) - len(lines[ms_i].lstrip())]
             hw_line = f"{indent}HWOUT {dst_field} 0 1 0 0 0 {src_field} -1:U -1"
-            if mode != "rec":
-                insert[ms_i] = [hw_line]
+            insert[ms_i] = [hw_line]
             outs.append(label)
             for c in ([dst, dst + 1] if n in stereo else [dst]):
                 if c in taken_out:
@@ -242,11 +246,7 @@ def route(text, *, in_map=None, out_map=None, stereo=(), master=None, names=None
                 taken_out[c] = n
         else:
             outs = [str((int(lines[i].split()[1]) & 1023) + 1) for i in hw]
-        if mode == "rec":
-            delete.update(hw)
-            row["out"] = "- (rec)"
-        else:
-            row["out"] = ",".join(outs) or "-"
+        row["out"] = ",".join(outs) or "-"
         report.append(row)
 
     out = []
@@ -271,7 +271,9 @@ def main(argv=None):
     p.add_argument("--names", metavar="FILE", help="track names from an LV1 .emo, X32 .scn, WING .snap or a text list")
     p.add_argument("--device", metavar="NAME",
                    help="with an LV1 .emo: name tracks from what LV1 patched to this SoundGrid DAW device")
-    p.add_argument("--mode", choices=["rec", "play"], help="rec: arm, no hardware outs; play: disarm, hardware outs")
+    p.add_argument("--arm", metavar="TRACKS|all", help="record-arm these tracks (all = every track)")
+    p.add_argument("--disarm", metavar="TRACKS|all", help="disarm these tracks (applied after --arm)")
+    p.add_argument("--monitor", choices=list(MONITOR), help="record monitoring on every changed track (off: no input echo)")
     p.add_argument("--only", metavar="TRACKS", help="change only these tracks, e.g. 1-40")
     p.add_argument("--src-stereo", action="store_true",
                    help="mono hardware outs take channels 1/2 mixed to mono instead of channel 1")
@@ -282,27 +284,49 @@ def main(argv=None):
             raise Refuse("write to a new file; the source stays as the backup.")
         if dst.exists():
             raise Refuse(f"{dst} exists; pick a new name.")
-        if a.mode == "rec" and a.outs:
-            raise Refuse("rec mode removes the hardware outs; route --out with --mode play.")
         with open(src, encoding="utf-8", newline="") as f:
             text = f.read()
         names = names_from_file(a.names, a.device) if a.names else None
+        count_hint = len(read_tracks(text.split("\r\n" if "\r\n" in text else "\n")))
+        every = list(range(1, count_hint + 1))
+        arm = {}
+        for spec, value in ((a.arm, True), (a.disarm, False)):
+            if spec:
+                for t in (every if spec == "all" else parse_tracks(spec)):
+                    arm[t] = value
         new, report, count = route(
             text, in_map=parse_map(a.ins), out_map=parse_map(a.outs),
             stereo=parse_tracks(a.stereo) if a.stereo else (),
-            master=None if a.master is None else a.master == "on", names=names, mode=a.mode,
-            src_mono=not a.src_stereo, only=parse_tracks(a.only) if a.only else None)
+            master=None if a.master is None else a.master == "on", names=names, arm=arm,
+            monitor=MONITOR.get(a.monitor), src_mono=not a.src_stereo, only=parse_tracks(a.only) if a.only else None)
     except (Refuse, OSError, json.JSONDecodeError, sqlite3.Error) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 1
     with open(dst, "w", encoding="utf-8", newline="") as f:
         f.write(new)
     print(f"{count} tracks in {src.name}; wrote {dst}")
-    print(f"{'trk':>4} {'name':<16} {'in':>6} {'out':>8} {'master':>6} {'armed':>5}")
+    print(f"{'trk':>4} {'name':<16} {'in':>6} {'out':>8} {'master':>6} {'armed':>5} {'mon':>4}")
     for r in report:
         print(f"{r['track']:>4} {r.get('name', ''):<16} {r['in']:>6} {r['out']:>8} "
-              f"{'on' if r['master'] else 'off':>6} {'yes' if r['armed'] else 'no':>5}")
+              f"{'on' if r['master'] else 'off':>6} {'yes' if r['armed'] else 'no':>5} {r['monitor']:>4}")
+    if a.device:
+        unpatched = [n for n in range(1, count + 1) if n not in names]
+        if unpatched:
+            print(f"not patched to {a.device} in LV1 (candidates to disarm): {ranges(unpatched)}")
     return 0
+
+
+def ranges(numbers):
+    out, start, prev = [], None, None
+    for n in sorted(numbers) + [None]:
+        if start is None:
+            start = prev = n
+        elif n == prev + 1:
+            prev = n
+        else:
+            out.append(f"{start}-{prev}" if prev != start else str(start))
+            start = prev = n
+    return ",".join(out)
 
 
 if __name__ == "__main__":

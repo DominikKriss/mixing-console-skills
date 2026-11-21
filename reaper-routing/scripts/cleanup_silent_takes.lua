@@ -20,28 +20,41 @@ local function file_size(path)
   return size or 0
 end
 
-local function exists(path)
-  local f = io.open(path, "rb")
-  if not f then return false end
-  f:close()
-  return true
+local ENOENT = 2
+
+local function file_state(path)
+  if path == "" then return "ok" end
+  local f, _, code = io.open(path, "rb")
+  if f then
+    f:close()
+    return "ok"
+  end
+  return code == ENOENT and "missing" or "error"
 end
 
-local takes = {}
+local proj = reaper.EnumProjects(-1)
+local takes, multi, unreadable = {}, 0, 0
 for i = 0, reaper.CountMediaItems(0) - 1 do
   local item = reaper.GetMediaItem(0, i)
   local take = reaper.GetActiveTake(item)
   if take and not reaper.TakeIsMIDI(take) then
-    local track = reaper.GetMediaItem_Track(item)
-    local _, name = reaper.GetSetMediaTrackInfo_String(track, "P_NAME", "", false)
-    takes[#takes + 1] = {
-      item = item, take = take, track = track, name = name,
-      num = math.floor(reaper.GetMediaTrackInfo_Value(track, "IP_TRACKNUMBER")),
-      file = reaper.GetMediaSourceFileName(reaper.GetMediaItemTake_Source(take)),
-    }
-    takes[#takes].missing = takes[#takes].file ~= "" and not exists(takes[#takes].file)
+    local file = reaper.GetMediaSourceFileName(reaper.GetMediaItemTake_Source(take))
+    local st = file_state(file)
+    if reaper.CountTakes(item) > 1 then
+      multi = multi + 1
+    elseif st == "error" then
+      unreadable = unreadable + 1
+    else
+      local track = reaper.GetMediaItem_Track(item)
+      local _, name = reaper.GetSetMediaTrackInfo_String(track, "P_NAME", "", false)
+      takes[#takes + 1] = {
+        item = item, take = take, track = track, name = name, file = file, missing = st == "missing",
+        num = math.floor(reaper.GetMediaTrackInfo_Value(track, "IP_TRACKNUMBER")),
+      }
+    end
   end
 end
+local change = reaper.GetProjectStateChangeCount(0)
 if #takes == 0 then
   reaper.ShowMessageBox("The project has no audio takes.", TITLE, 0)
   return
@@ -97,7 +110,7 @@ local function step(t)
 end
 
 local state, idx = "scan", 1
-local silent, used, bytes, missing = {}, {}, 0, 0
+local silent, missing = {}, 0
 local delete_files, scroll, result = false, 0, {}
 local prev_down, clicked = false, false
 
@@ -109,12 +122,9 @@ local function scan()
     if not t.done then step(t) end
     if t.done then
       if t.peak and t.peak <= limit then
-        t.size = file_size(t.file)
-        bytes = bytes + t.size
+        t.size, t.selected = file_size(t.file), true
         if t.missing then missing = missing + 1 end
         silent[#silent + 1] = t
-      else
-        used[t.file] = true
       end
       idx = idx + 1
       if idx > #takes then state = "list" end
@@ -122,22 +132,48 @@ local function scan()
   end
 end
 
+local function chosen()
+  local list, size, offline = {}, 0, 0
+  for _, t in ipairs(silent) do
+    if t.selected then
+      list[#list + 1] = t
+      size = size + t.size
+      if t.missing then offline = offline + 1 end
+    end
+  end
+  return list, size, offline
+end
+
+local function files_in_use()
+  local inuse = {}
+  for i = 0, reaper.CountMediaItems(0) - 1 do
+    local item = reaper.GetMediaItem(0, i)
+    for k = 0, reaper.CountTakes(item) - 1 do
+      local take = reaper.GetTake(item, k)
+      if take then inuse[reaper.GetMediaSourceFileName(reaper.GetMediaItemTake_Source(take))] = true end
+    end
+  end
+  return inuse
+end
+
 local function remove()
+  local list, _, offline = chosen()
   reaper.Undo_BeginBlock()
-  for _, t in ipairs(silent) do reaper.DeleteTrackMediaItem(t.track, t.item) end
+  for _, t in ipairs(list) do reaper.DeleteTrackMediaItem(t.track, t.item) end
   reaper.Undo_EndBlock("Remove silent takes", -1)
   reaper.UpdateArrange()
   if not delete_files then
     result = {
-      string.format("Removed %d takes from the project. Ctrl+Z brings them back.", #silent),
-      missing > 0 and string.format("%d of them were offline (file missing).", missing) or "",
+      string.format("Removed %d takes from the project. Ctrl+Z brings them back.", #list),
+      offline > 0 and string.format("%d of them were offline (file missing).", offline) or "",
       "The WAV files are kept.",
     }
     return
   end
+  local inuse = files_in_use()
   local removed, failed, freed = 0, 0, 0
-  for _, t in ipairs(silent) do
-    if not used[t.file] and not t.missing then
+  for _, t in ipairs(list) do
+    if not inuse[t.file] and not t.missing and t.file ~= "" then
       local size = file_size(t.file)
       if os.remove(t.file) then
         removed, freed = removed + 1, freed + size
@@ -145,11 +181,11 @@ local function remove()
       else
         failed = failed + 1
       end
-      used[t.file] = true
+      inuse[t.file] = true
     end
   end
   result = {
-    string.format("Removed %d takes and deleted %d WAV files, %.0f MB.", #silent, removed, freed / 1048576),
+    string.format("Removed %d takes and deleted %d WAV files, %.0f MB.", #list, removed, freed / 1048576),
     "Save the project now: undo can't bring deleted audio back.",
   }
   if failed > 0 then
@@ -212,10 +248,15 @@ local function draw()
     text(16, 16, string.format("No take is below %g dBFS or offline.", db))
     return button(w - 116, h - 46, 100, 30, "Close")
   end
-  local head = string.format("%d silent takes below %g dBFS, %.0f MB", #silent - missing, db, bytes / 1048576)
-  if missing > 0 then head = head .. string.format(", %d offline (file missing)", missing) end
+  local list, size, offline = chosen()
+  local head = string.format("%d of %d takes ticked, %.0f MB", #list, #silent, size / 1048576)
+  if offline > 0 then head = head .. string.format(", %d offline (file missing)", offline) end
   text(16, 16, head)
-  local top, bottom, lh = 48, h - 100, 20
+  local notes = {}
+  if multi > 0 then notes[#notes + 1] = string.format("%d items with several takes skipped", multi) end
+  if unreadable > 0 then notes[#notes + 1] = string.format("%d takes skipped: file can't be read", unreadable) end
+  if #notes > 0 then text(16, 38, table.concat(notes, ", "), 0.9, 0.7, 0.4) end
+  local top, bottom, lh = 64, h - 100, 20
   local rows = math.max(1, math.floor((bottom - top) / lh))
   if gfx.mouse_wheel ~= 0 then
     scroll = scroll - (gfx.mouse_wheel > 0 and 3 or -3)
@@ -226,8 +267,9 @@ local function draw()
     local t = silent[i + scroll]
     local y = top + (i - 1) * lh
     local level = t.missing and "file missing (offline)" or t.peak > 0 and string.format("%.0f dBFS", 20 * math.log(t.peak) / math.log(10)) or "digital silence"
-    text(16, y, tostring(t.num))
-    text(56, y, t.name)
+    t.selected = checkbox(16, y, "", t.selected)
+    text(44, y, tostring(t.num))
+    text(84, y, t.name)
     text(w - 260, y, level, 0.7, 0.7, 0.7)
     text(w - 100, y, string.format("%.0f MB", t.size / 1048576), 0.7, 0.7, 0.7)
   end
@@ -235,8 +277,12 @@ local function draw()
     text(16, bottom + 4, string.format("scroll for more (%d-%d of %d)", scroll + 1, math.min(scroll + rows, #silent), #silent), 0.6, 0.6, 0.6)
   end
   delete_files = checkbox(16, h - 72, "Also delete the WAV files (can't be undone)", delete_files)
-  if button(w - 232, h - 46, 100, 30, "Remove") then
-    remove()
+  if #list > 0 and button(w - 232, h - 46, 100, 30, "Remove") then
+    if reaper.EnumProjects(-1) ~= proj or reaper.GetProjectStateChangeCount(0) ~= change then
+      result = { "The project changed after the scan, so nothing was removed.", "Run the cleanup again." }
+    else
+      remove()
+    end
     state = "done"
     return false
   end

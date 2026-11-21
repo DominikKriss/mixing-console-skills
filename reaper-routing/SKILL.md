@@ -26,8 +26,11 @@ byte for byte, line endings included. The format and how sure each field is: [`r
 
 ## Commands
 
+Run the scripts by their path in the skill folder (`<skill-dir>` = the folder this file is in, e.g.
+`~/.claude/skills/reaper-routing`); project and show paths are relative to the current directory.
+
 ```sh
-python3 scripts/route_reaper.py SRC.rpp DEST.rpp [options]
+python3 <skill-dir>/scripts/route_reaper.py SRC.rpp DEST.rpp [options]
 ```
 
 | Option | Does |
@@ -50,7 +53,7 @@ and the same file plays back to the console for virtual soundcheck (armed tracks
 items and don't echo the live input).
 
 ```sh
-python3 scripts/route_reaper.py show.rpp show_routed.rpp --in 1-64 --out 1-64 --master off \
+python3 <skill-dir>/scripts/route_reaper.py show.rpp show_routed.rpp --in 1-64 --out 1-64 --master off \
   --names show.emo --device REC-PC --arm all --monitor off
 ```
 
@@ -61,14 +64,17 @@ tracks LV1 doesn't feed; suggest those. Apply the answer with a second run on th
 
 ## Routing from inside REAPER
 
-[`scripts/route_tracks.lua`](scripts/route_tracks.lua) does the same routing in a REAPER window, without the
-command line: track range or selected tracks (creating missing tracks), record inputs and hardware outs from a first
+[`scripts/route_tracks.lua`](scripts/route_tracks.lua) does the mono routing in a REAPER window, without the
+command line (one mono input and one mono hardware out per track; for stereo pairs use `route_reaper.py --stereo`
+or route those tracks by hand in REAPER): track range or selected tracks (creating missing tracks), record inputs and hardware outs from a first
 channel (it shows the audio device's channel names and warns past its channel count), master send off, record arm,
 monitoring off, and names from a text file (line N = track N). **Save names...** writes the open project's
 track names to such a file (a save dialog on REAPER versions that have one, else `<project>_names.txt` next to
-the project), so an older project's names can go into a new one. Unticked options leave tracks as they are; Apply is
-one undo step. To get names from the show, run `python3 scripts/export_names.py show.emo names.txt --device REC-PC`
-(also `.scn`, `.snap`) and pick that file in the window. Load it like the cleanup script below.
+the project; always `.txt`), so an older project's names can go into a new one. Unticked options leave tracks as they are; Apply is
+one undo step. To get names from the show, run
+`python3 <skill-dir>/scripts/export_names.py show.emo names.txt --device REC-PC` for an LV1 session (names from
+the patch to the recording device), or `python3 <skill-dir>/scripts/export_names.py show.scn names.txt` for an
+X32 `.scn`, WING `.snap` or REAPER `.rpp` (no `--device`), and pick that file in the window. Load it like the cleanup script below.
 
 ## Cleanup after a recording
 
@@ -79,8 +85,12 @@ on the toolbar > Customize toolbar > Add, or a shortcut) and runs it. It asks fo
 then opens a window with scan progress and the list of silent takes (track, level, size; digital silence = nothing
 patched, around -80 dBFS = an input with nothing playing), plus takes whose file is missing (offline, e.g. after
 undoing a removal whose WAVs were deleted), which the user would otherwise get a missing-file message for when
-reopening the project. **Remove** takes the items out in one undo step; the
-**Also delete the WAV files** checkbox (off by default) also deletes the files nothing else uses. After deleting,
+reopening the project. Every row has a checkbox (ticked by default) to keep a take out of the cleanup.
+**Remove** takes the ticked items out in one undo step; the **Also delete the WAV files** checkbox (off by
+default) also deletes their files when no take left in this project uses them. It checks only the open project:
+if another project uses the same WAV files (a copy of the project pointing at the same `Media` folder), deleting
+breaks it, so warn the user and suggest a backup first. Items with several takes and takes whose file can't be read
+are skipped and counted, and Remove refuses if the project changed after the scan. After deleting,
 tell the user to save right away. If Windows keeps a file open, the window says so; then save and use File > Clean
 current project directory.
 
@@ -98,7 +108,7 @@ Show-specific content isn't a lesson: the user's track names and patch stay in t
 If there is a lesson:
 
 1. **Make the change in this skill folder**, kept generic (no band, venue, channel or device names), following the repo's `AGENTS.md` and `CONTRIBUTING.md`: `SKILL.md` and `reference/rpp-format.md` updated with the scripts, tests added, Python standard library only. A fix to `scripts/contribute.sh` is the exception: the script is shared by every skill and publishes only this folder, so offer an issue for it instead of a pull request.
-2. **Write the PR body** to a scratch file: what changed, what happened in the run that showed it, and evidence (REAPER version and OS, the script's output, what REAPER's routing matrix showed after loading the result). No project files or show names.
+2. **Write the PR body** to a scratch file: what changed, what happened in the run that showed it, and evidence (REAPER version and OS, what REAPER's routing matrix showed after loading the result, and the script's output only with the name column removed or replaced by generic names such as `ch 1`). No project files, track names or show names.
 3. **Dry run and ask.** Run `bash <skill-dir>/scripts/contribute.sh --title "<title>" --body-file <file> --dry-run`, show the user the output (GitHub account, commit author, files) and ask whether to open the pull request from their account. Offer their GitHub noreply address with `--email` if they'd rather not publish their email.
 4. **Only after a clear yes**, run it without `--dry-run` and give the user the PR link.
 

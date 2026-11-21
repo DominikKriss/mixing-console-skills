@@ -107,6 +107,10 @@ class Route(unittest.TestCase):
         self.assertEqual(first(new, 2, "MAINSEND"), "MAINSEND 0 0")
         self.assertEqual([r["track"] for r in report], [2, 3])
 
+    def test_empty_project_refused(self):
+        with self.assertRaisesRegex(rr.Refuse, "no tracks"):
+            rr.route("<REAPER_PROJECT 0.1\n  MASTERHWOUT\n>\n", master=False)
+
     def test_refusals(self):
         with self.assertRaises(rr.Refuse):
             rr.route(project(), out_map={5: 5})
@@ -172,6 +176,16 @@ class Names(unittest.TestCase):
         self.assertEqual(rr.names_from_file(path, "REC_PC_HOST"), expected)
         self.assertEqual(rr.names_from_file(path, "PLAYER"), {1: "KICK"})
 
+    def test_lv1_device_keeps_dots(self):
+        path = self.emo_with_patch()
+        db = sqlite3.connect(path)
+        db.execute("update device_name set name = 'REC.PC' where mac = 600")
+        db.execute("update device_daw set hostname = 'other' where id = 6")
+        db.commit()
+        db.close()
+        self.assertEqual(rr.names_from_file(path, "REC.PC"), {1: "KICK"})
+        self.assertEqual(rr.names_from_file(path, "rec pc"), {1: "KICK", 3: "KEYS L", 4: "KEYS R"})
+
     def test_lv1_device_unknown(self):
         with self.assertRaisesRegex(rr.Refuse, "PLAYER, REC-PC"):
             rr.names_from_file(self.emo_with_patch(), "laptop")
@@ -198,6 +212,10 @@ class Names(unittest.TestCase):
         (self.dir / "n.csv").write_text("KICK,1\nSN,2\n", encoding="utf-8")
         self.assertEqual(rr.names_from_file(self.dir / "n.txt"), {1: "KICK", 2: "SN"})
         self.assertEqual(rr.names_from_file(self.dir / "n.csv"), {1: "KICK", 2: "SN"})
+
+    def test_csv_quoted_comma(self):
+        (self.dir / "q.csv").write_text('"Keys, lead",1\n\nBASS\n', encoding="utf-8")
+        self.assertEqual(rr.names_from_file(self.dir / "q.csv"), {1: "Keys, lead", 2: "", 3: "BASS"})
 
     def test_rpp(self):
         path = self.dir / "old.rpp"
@@ -239,6 +257,21 @@ class Cli(unittest.TestCase):
         dst = self.src.with_name("taken.rpp")
         dst.write_text("x", encoding="utf-8")
         self.assertEqual(self.run_cli(self.src, dst, "--master", "off")[0], 1)
+
+    def test_dest_must_be_beside_source(self):
+        other = Path(self.tmp.name) / "sub"
+        other.mkdir()
+        code, _, err = self.run_cli(self.src, other / "p2.rpp", "--master", "off")
+        self.assertEqual(code, 1)
+        self.assertIn("same folder", err)
+        self.assertFalse((other / "p2.rpp").exists())
+
+    def test_device_needs_names(self):
+        dst = self.src.with_name("d.rpp")
+        code, _, err = self.run_cli(self.src, dst, "--device", "REC-PC", "--master", "off")
+        self.assertEqual(code, 1)
+        self.assertIn("--names", err)
+        self.assertFalse(dst.exists())
 
     def test_ranges(self):
         self.assertEqual(rr.ranges([1, 2, 3, 5, 7, 8]), "1-3,5,7-8")

@@ -44,7 +44,8 @@ from another skill's folder; shared helpers are copied (for example the X32 scen
 - A format fact goes in the skill's `reference/` with its proof: an editor load, a controlled save (one change,
   two saves, diffed), or "unconfirmed". Don't write a guess as a fact. When a user reports an editor load, record
   it in the skill's README status with editor version and date.
-- Never commit show files (`.emo`, `.snap`, `.dmxf`, `.dm7f`, `.scn`); `.gitignore` blocks them.
+- Never commit show files (`.emo`, `.snap`, `.dmxf`, `.dm7f`, `.scn`, `.rpp`); `.gitignore` blocks them and
+  `contribute.sh` refuses them.
 - Scripts run on macOS, Windows and Linux: open text files with `encoding="utf-8"`, close every SQLite
   connection (also on refusals; Windows locks open files), build paths with `pathlib`, keep shell scripts to what
   Git Bash has (no `rsync`, no `python3` assumption). CI runs the tests on all three.

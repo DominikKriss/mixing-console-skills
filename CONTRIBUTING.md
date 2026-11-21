@@ -53,6 +53,6 @@ The easiest way: after a run that taught a skill something, Claude Code offers t
   - the script output, ending with `integrity: ok` and `presets with wrong ref_count: 0`
   - the `diff_lv1_sessions.py` output before → after
   - confirmation that LV1 loaded the result and showed the change
-- Never commit show files (`.emo`, `.snap`, `.dmxf`, `.dm7f`, `.scn`; `.gitignore` blocks them). For WING and DM7, include the builder output and what the editor (WING-Edit, DM Editor) showed after loading the result.
+- Never commit show files (`.emo`, `.snap`, `.dmxf`, `.dm7f`, `.scn`, `.rpp`; `.gitignore` blocks them). For WING and DM7, include the builder output and what the editor (WING-Edit, DM Editor) showed after loading the result.
 
 By contributing you agree that your contribution is licensed under the [GPL-3.0](LICENSE).

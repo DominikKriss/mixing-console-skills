@@ -30,7 +30,10 @@ local function load_names()
   local list = {}
   for line in f:lines() do
     line = line:gsub("\r$", "")
-    if csv then line = line:match("^([^,]*)") end
+    if csv then
+      local quoted = line:match('^%s*"(.-)"%s*,') or line:match('^%s*"(.-)"%s*$')
+      line = quoted and quoted:gsub('""', '"') or line:match("^([^,]*)")
+    end
     list[#list + 1] = line:match("^%s*(.-)%s*$")
   end
   f:close()
@@ -52,26 +55,33 @@ local function save_names()
   else
     ok, path = reaper.GetUserInputs(TITLE, 1, "Save names to file (project not saved yet)", initial)
   end
-  if not ok or path == "" then return end
-  if not path:lower():match("%.txt$") and not path:lower():match("%.csv$") then path = path .. ".txt" end
-  local probe = io.open(path, "r")
-  if probe then
-    probe:close()
-    if reaper.ShowMessageBox(path .. " exists. Overwrite it?", TITLE, 4) ~= 6 then return end
+  while ok and path ~= "" do
+    path = path:gsub("%.[Cc][Ss][Vv]$", "")
+    if not path:lower():match("%.txt$") then path = path .. ".txt" end
+    local probe = io.open(path, "r")
+    if probe then
+      probe:close()
+      if reaper.ShowMessageBox(path .. " exists. Overwrite it?", TITLE, 4) ~= 6 then return end
+    end
+    local f, err = io.open(path, "w")
+    local good = f ~= nil
+    local count, named = reaper.CountTracks(0), 0
+    if f then
+      for i = 0, count - 1 do
+        local _, name = reaper.GetSetMediaTrackInfo_String(reaper.GetTrack(0, i), "P_NAME", "", false)
+        if name ~= "" then named = named + 1 end
+        if not f:write(name, "\n") then good = false end
+      end
+      local closed, cerr = f:close()
+      if not closed then good, err = false, cerr end
+    end
+    if good then
+      status = string.format("Saved %d names of %d tracks to %s", named, count, path:match("[^\\/]+$"))
+      return
+    end
+    status = "Can't write " .. path .. (err and (": " .. err) or "")
+    ok, path = reaper.GetUserInputs(TITLE, 1, "Can't write there. Save names to file", path)
   end
-  local f = io.open(path, "w")
-  if not f then
-    status = "Can't write " .. path
-    return
-  end
-  local count, named = reaper.CountTracks(0), 0
-  for i = 0, count - 1 do
-    local _, name = reaper.GetSetMediaTrackInfo_String(reaper.GetTrack(0, i), "P_NAME", "", false)
-    if name ~= "" then named = named + 1 end
-    f:write(name, "\n")
-  end
-  f:close()
-  status = string.format("Saved %d names of %d tracks to %s", named, count, path:match("[^\\/]+$"))
 end
 
 local function targets()
@@ -91,15 +101,17 @@ local function apply()
   reaper.Undo_BeginBlock()
   reaper.PreventUIRefresh(1)
   local list = targets()
-  local named = 0
+  local named, failed = 0, 0
   for k, tr in ipairs(list) do
     if o.inputs then reaper.SetMediaTrackInfo_Value(tr, "I_RECINPUT", o.in1 - 1 + k - 1) end
     if o.outs then
-      for s = reaper.GetTrackNumSends(tr, 1) - 1, 0, -1 do reaper.RemoveTrackSend(tr, 1, s) end
-      if reaper.CreateTrackSend(tr, nil) >= 0 then
-        local idx = reaper.GetTrackNumSends(tr, 1) - 1
-        reaper.SetTrackSendInfo_Value(tr, 1, idx, "I_DSTCHAN", o.out1 - 1 + k - 1 + MONO)
-        reaper.SetTrackSendInfo_Value(tr, 1, idx, "I_SRCCHAN", MONO)
+      local old = reaper.GetTrackNumSends(tr, 1)
+      if reaper.CreateTrackSend(tr, nil) >= 0 and reaper.GetTrackNumSends(tr, 1) == old + 1 then
+        reaper.SetTrackSendInfo_Value(tr, 1, old, "I_DSTCHAN", o.out1 - 1 + k - 1 + MONO)
+        reaper.SetTrackSendInfo_Value(tr, 1, old, "I_SRCCHAN", MONO)
+        for s = old - 1, 0, -1 do reaper.RemoveTrackSend(tr, 1, s) end
+      else
+        failed = failed + 1
       end
     end
     if o.master_off then reaper.SetMediaTrackInfo_Value(tr, "B_MAINSEND", 0) end
@@ -120,6 +132,9 @@ local function apply()
   reaper.Undo_EndBlock("Route tracks", -1)
   status = string.format("Routed %d tracks%s. Ctrl+Z undoes it.", #list,
     o.names and string.format(", named %d", named) or "")
+  if failed > 0 then
+    status = status .. string.format(" %d tracks kept their old hardware outs: REAPER didn't add a new one.", failed)
+  end
 end
 
 local function text(x, y, s, r, g, b)

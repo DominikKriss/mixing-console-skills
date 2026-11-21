@@ -49,7 +49,8 @@ Runs inside REAPER. API calls, all from the [ReaScript API](https://www.reaper.f
 (interleaved, pre-FX; returns -1 on error), `DestroyAudioAccessor`, `new_array` (`.clear`, `.table` with 1-based
 offsets), `GetMediaItem_Track`, `GetSetMediaTrackInfo_String` (`P_NAME`), `GetMediaTrackInfo_Value`
 (`IP_TRACKNUMBER`), `ShowMessageBox` (type 4 = Yes/No, 6 = Yes), `Undo_BeginBlock`, `Undo_EndBlock`,
-`DeleteTrackMediaItem`, `UpdateArrange`, `defer`, `atexit`, `time_precise`. Window (same page, Lua built-ins): `gfx.init`,
+`DeleteTrackMediaItem`, `UpdateArrange`, `defer`, `atexit`, `time_precise`, `CountTakes`, `GetTake` (0-based),
+`GetProjectStateChangeCount`, `EnumProjects`. Window (same page, Lua built-ins): `gfx.init`,
 `gfx.quit`, `gfx.update`, `gfx.getchar` (-1 = window closed, 27 = Esc), `gfx.set`, `gfx.rect`, `gfx.drawstr`,
 `gfx.measurestr` (returns w, h), `gfx.setfont`, and the variables `gfx.x`, `gfx.y`, `gfx.w`, `gfx.h`, `gfx.mouse_x`,
 `gfx.mouse_y`, `gfx.mouse_cap` (1 = left button), `gfx.mouse_wheel` (the script resets it to 0).
@@ -62,14 +63,18 @@ offsets), `GetMediaItem_Track`, `GetSetMediaTrackInfo_String` (`P_NAME`), `GetMe
   listed as "file missing (offline)" whatever the threshold, and Remove takes it out of the project. Takes with no
   file name (sources without a file) are left alone. Confirmed by the owner in REAPER on Windows (2026-11-21): offline
   takes listed and removed, no missing-file message on reopening.
-- A file is deleted only when no remaining item uses it. Windows refuses to delete a file REAPER still has open;
+- Only single-take items are candidates: `DeleteTrackMediaItem` removes the whole item, so an item with more takes
+  is skipped. A file that `io.open` can't open counts as missing only for `ENOENT` (2); other errors skip the take.
+  Remove refuses when `EnumProjects(-1)` or `GetProjectStateChangeCount` differ from the scan. Every candidate has
+  its own checkbox, ticked by default. **Unconfirmed** in REAPER (added after the runs below).
+- A file is deleted only when no take of any remaining item (active or not) uses it. Windows refuses to delete a file REAPER still has open;
   the script then names REAPER's File > Clean current project directory, whose action ID isn't documented, so the
   script doesn't call it.
 - The Lua version isn't documented, so the script avoids `math.log(x, base)`.
-- 2026-11-21, owner, REAPER on Windows: the first version (list in a message box) listed tracks 33-64 without an LV1
-  patch as digital silence and unused stagebox inputs at about -80 dBFS (preamp noise). Window version run by the
-  owner the same day: without the checkbox the takes leave the project and the WAVs stay; with it the WAVs are
-  deleted from disk while REAPER is open (no Windows file lock seen).
+- Run in REAPER on Windows (2026-11-21): unpatched recording channels were listed as digital
+  silence and connected inputs with nothing playing at about -80 dBFS (preamp noise). Without the delete checkbox
+  the takes leave the project and the WAVs stay; with it the WAVs are deleted while REAPER is open (no Windows file
+  lock seen).
 
 ## Routing ReaScript (`scripts/route_tracks.lua`)
 
@@ -87,6 +92,9 @@ project, returns its file name), `GetProjectName`, `GetUserFileName` (mode 0 = c
   it the script saves `<project>_names.txt` next to the project without asking (a `GetUserInputs` field only for a
   project never saved). Confirmed by the owner in REAPER 7.35 (2026-11-21).
 
-- The new hardware out's index is read back with `GetTrackNumSends` after removing the old ones, not taken from
-  `CreateTrackSend`'s return value.
+- The new hardware out is created first and its index read back with `GetTrackNumSends` (not taken from
+  `CreateTrackSend`'s return value); only when that worked are the old hardware outs removed, so a failure leaves
+  the track's routing as it was.
+- Save names always writes `.txt`, checks every write and the close, and asks for another path when the file can't
+  be written. Load reads `.csv` first columns with `"..."` quoting. **Unconfirmed** in REAPER.
 - **Unconfirmed:** not yet run in REAPER.

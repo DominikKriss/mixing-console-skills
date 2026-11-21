@@ -113,6 +113,26 @@ class Contribute(unittest.TestCase):
         r = self.run_script("--dry-run")
         self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
 
+    def test_reaper_project_is_refused(self):
+        for name in ("show.rpp", "show.RPP-bak"):
+            f = self.skill / name
+            f.write_text("<REAPER_PROJECT\n>\n", encoding="utf-8")
+            git(self.clone, "add", "-f", f"lv1-session/{name}")
+            r = self.run_script("--dry-run")
+            self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+            git(self.clone, "rm", "-q", "--cached", f"lv1-session/{name}")
+            f.unlink()
+
+    def test_reaper_project_in_history_is_refused(self):
+        git(self.clone, "checkout", "-q", "-b", "learn/x")
+        (self.skill / "show.rpp").write_text("x\n", encoding="utf-8")
+        git(self.clone, "add", "-f", "lv1-session/show.rpp")
+        git(self.clone, "commit", "-qm", "oops")
+        git(self.clone, "rm", "-q", "lv1-session/show.rpp")
+        git(self.clone, "commit", "-qm", "remove")
+        r = self.run_script("--dry-run")
+        self.assertEqual(r.returncode, 4, r.stdout + r.stderr)
+
     def test_staged_file_outside_the_skill_is_refused(self):
         (self.skill / "SKILL.md").write_text("skill v2\n", encoding="utf-8")
         (self.clone / "README.md").write_text("private note\n", encoding="utf-8")

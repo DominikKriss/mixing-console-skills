@@ -15,6 +15,8 @@ commands and [reference/rpp-format.md](reference/rpp-format.md) for the format.
 
 ## Tests
 
+From the `reaper-routing` folder:
+
 ```sh
 python3 -m unittest discover -s tests -t tests
 ```

@@ -27,8 +27,12 @@ def main(argv=None):
         print(f"refused: {e}", file=sys.stderr)
         return 1
     last = max(names)
-    with open(dest, "w", encoding="utf-8", newline="\r\n") as f:
-        f.write("\n".join(names.get(n, "") for n in range(1, last + 1)) + "\n")
+    try:
+        with open(dest, "x", encoding="utf-8", newline="\r\n") as f:
+            f.write("\n".join(names.get(n, "") for n in range(1, last + 1)) + "\n")
+    except OSError as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 1
     print(f"wrote {sum(1 for v in names.values() if v)} names for tracks 1-{last} to {dest}")
     return 0
 

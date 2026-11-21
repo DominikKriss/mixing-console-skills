@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Set record inputs, hardware outputs, master send, names, record arm and monitoring on the tracks of a REAPER .rpp."""
 import argparse
+import csv
 import json
 import re
 import shlex
@@ -60,7 +61,7 @@ def quote(name):
 
 
 def norm(name):
-    return re.sub(r"[^a-z0-9]", "", name.lower())
+    return re.sub(r"[\s_-]", "", name.lower())
 
 
 def emo_device_names(db, device):
@@ -133,11 +134,15 @@ def names_from_file(path, device=None):
                 names[t.number] = value
         return names
     if suffix in (".txt", ".csv", ""):
-        with open(path, encoding="utf-8") as f:
-            lines = [ln.rstrip("\r\n") for ln in f]
-        while lines and not lines[-1].strip():
+        with open(path, encoding="utf-8", newline="") as f:
+            if suffix == ".csv":
+                lines = [(row[0] if row else "") for row in csv.reader(f)]
+            else:
+                lines = [ln.rstrip("\r\n") for ln in f]
+        lines = [ln.strip() for ln in lines]
+        while lines and not lines[-1]:
             lines.pop()
-        return {i + 1: ln.split(",")[0].strip() if suffix == ".csv" else ln.strip() for i, ln in enumerate(lines)}
+        return {i + 1: ln for i, ln in enumerate(lines)}
     raise Refuse(f"{path.name}: names come from .emo, .scn, .snap, .rpp, .txt or .csv.")
 
 
@@ -179,6 +184,8 @@ def route(text, *, in_map=None, out_map=None, stereo=(), master=None, names=None
     lines = text.split(nl)
     tracks = read_tracks(lines)
     count = len(tracks)
+    if count == 0:
+        raise Refuse("the project has no tracks; add them in REAPER and save first.")
     stereo = set(stereo)
     for label, m in (("input", in_map or {}), ("output", out_map or {})):
         for t, ch in m.items():
@@ -294,8 +301,12 @@ def main(argv=None):
         src, dst = Path(a.source), Path(a.dest)
         if dst.resolve() == src.resolve():
             raise Refuse("write to a new file; the source stays as the backup.")
+        if dst.resolve().parent != src.resolve().parent:
+            raise Refuse("write the new project in the same folder as the source; its media paths are relative to it.")
         if dst.exists():
             raise Refuse(f"{dst} exists; pick a new name.")
+        if a.device and not a.names:
+            raise Refuse("--device needs --names with the LV1 session.")
         with open(src, encoding="utf-8", newline="") as f:
             text = f.read()
         names = names_from_file(a.names, a.device) if a.names else None
@@ -314,8 +325,12 @@ def main(argv=None):
     except (Refuse, OSError, json.JSONDecodeError, sqlite3.Error) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 1
-    with open(dst, "w", encoding="utf-8", newline="") as f:
-        f.write(new)
+    try:
+        with open(dst, "x", encoding="utf-8", newline="") as f:
+            f.write(new)
+    except OSError as e:
+        print(f"refused: {e}", file=sys.stderr)
+        return 1
     print(f"{count} tracks in {src.name}; wrote {dst}")
     print(f"{'trk':>4} {'name':<16} {'in':>6} {'out':>8} {'master':>6} {'armed':>5} {'mon':>4}")
     for r in report:

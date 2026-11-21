@@ -36,3 +36,20 @@ jobs:
       - name: ShellCheck
         if: runner.os == 'Linux'
         run: shellcheck */scripts/*.sh
+
+  branch-name:
+    name: branch name
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Branch is feature/<issue>_<desc> or fix/<issue>_<desc>
+        env:
+          BRANCH: ${{ github.head_ref }}
+        run: |
+          if [[ "$BRANCH" =~ ^(feature|fix)/[0-9]+_[a-z0-9][a-z0-9._-]*$ || "$BRANCH" =~ ^learn/ ]]; then
+            echo "ok: $BRANCH"
+          else
+            echo "::error::Branch '$BRANCH' must be feature/<issue>_<short-desc> or fix/<issue>_<short-desc>, e.g. feature/8_windows-support (see AGENTS.md)."
+            exit 1
+          fi

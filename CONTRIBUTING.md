@@ -38,6 +38,10 @@ Questions while you work? Open a draft pull request early; the maintainer is hap
 
 Work is tracked in [GitHub issues](https://github.com/DominikKriss/mixing-console-skills/issues), labelled by type and skill. Decisions that affect more than one skill, or that a contributor would trip over, are recorded as [ADRs](docs/adr/README.md): copy `docs/adr/template.md`, add a row to the index, and propose it in your pull request with status `Proposed`.
 
+## Branch names
+
+Open or pick an issue first, then branch from `main` as `feature/<issue>_<short-desc>` (or `fix/<issue>_<short-desc>` for a bug), e.g. `feature/8_windows-support`, and put `Closes #<issue>` in the pull request. The short description is lowercase and uses only `a-z`, `0-9`, `-`, `.` and `_`, starting with a letter or digit (`feature/8_Add-console` is rejected). CI checks the branch name. Pull requests opened by Claude Code's `contribute.sh` use `learn/...` branches and are exempt.
+
 ## Pull requests
 
 The easiest way: after a run that taught a skill something, Claude Code offers to open the pull request for you (`<skill>/scripts/contribute.sh`, the same script in every skill, which needs the GitHub CLI logged in). It forks the repo to your account and commits only the skill folder; check the dry-run output for the commit email you want to publish.

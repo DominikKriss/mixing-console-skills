@@ -8,6 +8,16 @@ Read [docs/adr/](docs/adr/README.md) before changing how skills are built: one f
 status and scope. A change that contradicts an accepted ADR needs a new ADR that supersedes it (keep the old one,
 set its status to `Superseded by NNNN`). Work items are GitHub issues, labelled with the same scope names.
 
+## Issues and branches
+
+Every change starts from a GitHub issue. Create the issue first, then a branch from `main` named after it:
+
+- `feature/<issue>_<short-desc>` for a change, e.g. `feature/8_windows-support`
+- `fix/<issue>_<short-desc>` for a bug fix
+
+The short description is lowercase: `a-z`, `0-9`, `-`, `.`, `_`, starting with a letter or digit; words joined with `-`. The pull request says `Closes #<issue>`. CI fails a pull request whose branch
+doesn't match. Only `learn/...` branches from `contribute.sh` (outside contributors) are exempt.
+
 ## Layout
 
 One folder per skill: `lv1-session/` (Waves eMotion LV1), `wing-snapshot/` (Behringer WING), `dm7-session/`

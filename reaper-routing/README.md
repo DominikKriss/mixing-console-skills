@@ -19,4 +19,8 @@ From the `reaper-routing` folder:
 
 ```sh
 python3 -m unittest discover -s tests -t tests
+lua tests/lua/run.lua
 ```
+
+The ReaScripts run against `tests/lua/mock_reaper.lua`, an in-memory stand-in for the REAPER calls they use; the
+unittest run includes them when Lua (5.4 or later) is installed, and CI requires it on Linux.

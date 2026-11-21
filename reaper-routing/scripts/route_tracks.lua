@@ -2,23 +2,9 @@
 local TITLE = "Route tracks"
 local MONO = 1024
 
-local count = reaper.CountTracks(0)
-local o = {
-  first = 1, last = count > 0 and count or 64, selected = false, create = true,
-  inputs = true, in1 = 1, outs = true, out1 = 1,
-  master_off = true, arm = true, mon_off = true,
-  names = nil, names_file = nil,
-}
-local status, prev_down, clicked = "", false, false
+local M = { open = io.open }
 
-local function ask(caption, value)
-  local ok, v = reaper.GetUserInputs(TITLE, 1, caption, tostring(value))
-  v = ok and tonumber(v)
-  if v and v >= 1 then return math.floor(v) end
-  return value
-end
-
-local function first_csv_field(line)
+function M.first_csv_field(line)
   local s = line:match("^%s*(.*)$")
   if s:sub(1, 1) ~= '"' then return s:match("^([^,]*)") end
   local out, i = {}, 2
@@ -34,70 +20,42 @@ local function first_csv_field(line)
   return table.concat(out)
 end
 
-local function load_names()
-  local ok, path = reaper.GetUserFileNameForRead("", "Track names: one per line, line N = track N", "txt")
-  if not ok then return end
-  local f = io.open(path, "r")
-  if not f then
-    status = "Can't read " .. path
-    return
-  end
+function M.read_names(path)
+  local f, err = M.open(path, "r")
+  if not f then return nil, err end
   local csv = path:lower():match("%.csv$") ~= nil
   local list = {}
-  for line in f:lines() do
-    line = line:gsub("\r$", "")
-    if csv then line = first_csv_field(line) end
+  for raw in f:lines() do
+    local line = raw:gsub("\r$", "")
+    if csv then line = M.first_csv_field(line) end
     list[#list + 1] = line:match("^%s*(.-)%s*$")
   end
   f:close()
-  o.names, o.names_file = list, path:match("[^\\/]+$")
+  return list
 end
 
-local function save_names()
-  local _, projfn = reaper.EnumProjects(-1)
-  local dir = projfn and projfn:match("^(.*)[\\/]") or ""
-  local base = (reaper.GetProjectName(0) or ""):gsub("%.[Rr][Pp][Pp]$", "")
-  if base == "" then base = "tracks" end
-  local sep = dir:find("\\") and "\\" or "/"
-  local initial = dir ~= "" and (dir .. sep .. base .. "_names.txt") or (base .. "_names.txt")
-  local ok, path
-  if reaper.GetUserFileName then
-    ok, path = reaper.GetUserFileName(0, "Save track names", initial, "")
-  elseif dir ~= "" then
-    ok, path = true, initial
-  else
-    ok, path = reaper.GetUserInputs(TITLE, 1, "Save names to file (project not saved yet)", initial)
-  end
-  while ok and path ~= "" do
-    path = path:gsub("%.[Cc][Ss][Vv]$", "")
-    if not path:lower():match("%.txt$") then path = path .. ".txt" end
-    local probe = io.open(path, "r")
-    if probe then
-      probe:close()
-      if reaper.ShowMessageBox(path .. " exists. Overwrite it?", TITLE, 4) ~= 6 then return end
-    end
-    local f, err = io.open(path, "w")
-    local good = f ~= nil
-    local count, named = reaper.CountTracks(0), 0
-    if f then
-      for i = 0, count - 1 do
-        local _, name = reaper.GetSetMediaTrackInfo_String(reaper.GetTrack(0, i), "P_NAME", "", false)
-        if name ~= "" then named = named + 1 end
-        if not f:write(name, "\n") then good = false end
-      end
-      local closed, cerr = f:close()
-      if not closed then good, err = false, cerr end
-    end
-    if good then
-      status = string.format("Saved %d names of %d tracks to %s", named, count, path:match("[^\\/]+$"))
-      return
-    end
-    status = "Can't write " .. path .. (err and (": " .. err) or "")
-    ok, path = reaper.GetUserInputs(TITLE, 1, "Can't write there. Save names to file", path)
-  end
+function M.txt_path(path)
+  path = path:gsub("%.[Cc][Ss][Vv]$", "")
+  if not path:lower():match("%.txt$") then path = path .. ".txt" end
+  return path
 end
 
-local function targets()
+function M.write_names(path)
+  local f, err = M.open(path, "w")
+  if not f then return false, err end
+  local good, count, named = true, reaper.CountTracks(0), 0
+  for i = 0, count - 1 do
+    local _, name = reaper.GetSetMediaTrackInfo_String(reaper.GetTrack(0, i), "P_NAME", "", false)
+    if name ~= "" then named = named + 1 end
+    if not f:write(name, "\n") then good = false end
+  end
+  local closed, cerr = f:close()
+  if not closed then good, err = false, cerr end
+  if not good then return false, err end
+  return true, named, count
+end
+
+local function targets(o)
   local list = {}
   if o.selected then
     for i = 0, reaper.CountSelectedTracks(0) - 1 do list[#list + 1] = reaper.GetSelectedTrack(0, i) end
@@ -110,10 +68,10 @@ local function targets()
   return list
 end
 
-local function apply()
+function M.apply(o)
   reaper.Undo_BeginBlock()
   reaper.PreventUIRefresh(1)
-  local list = targets()
+  local list = targets(o)
   local named, failed = 0, 0
   for k, tr in ipairs(list) do
     if o.inputs then reaper.SetMediaTrackInfo_Value(tr, "I_RECINPUT", o.in1 - 1 + k - 1) end
@@ -143,140 +101,205 @@ local function apply()
   reaper.TrackList_AdjustWindows(false)
   reaper.UpdateArrange()
   reaper.Undo_EndBlock("Route tracks", -1)
-  status = string.format("Routed %d tracks%s. Ctrl+Z undoes it.", #list,
+  local status = string.format("Routed %d tracks%s. Ctrl+Z undoes it.", #list,
     o.names and string.format(", named %d", named) or "")
   if failed > 0 then
     status = status .. string.format(" %d tracks kept their old hardware outs: REAPER didn't add a new one.", failed)
   end
+  return status, #list, failed
 end
 
-local function text(x, y, s, r, g, b)
-  gfx.set(r or 0.9, g or 0.9, b or 0.9, 1)
-  gfx.x, gfx.y = x, y
-  gfx.drawstr(s)
-end
+function M.run()
+  local count = reaper.CountTracks(0)
+  local o = {
+    first = 1, last = count > 0 and count or 64, selected = false, create = true,
+    inputs = true, in1 = 1, outs = true, out1 = 1,
+    master_off = true, arm = true, mon_off = true,
+    names = nil, names_file = nil,
+  }
+  local status, prev_down, clicked = "", false, false
 
-local function inside(x, y, w, h)
-  return gfx.mouse_x >= x and gfx.mouse_x < x + w and gfx.mouse_y >= y and gfx.mouse_y < y + h
-end
-
-local function button(x, y, w, h, label)
-  local over = inside(x, y, w, h)
-  local c = over and 0.38 or 0.27
-  gfx.set(c, c, c, 1)
-  gfx.rect(x, y, w, h, 1)
-  local tw, th = gfx.measurestr(label)
-  text(x + (w - tw) / 2, y + (h - th) / 2, label)
-  return over and clicked
-end
-
-local function checkbox(x, y, label, value)
-  gfx.set(0.8, 0.8, 0.8, 1)
-  gfx.rect(x, y, 16, 16, 0)
-  if value then
-    gfx.set(0.4, 0.75, 1, 1)
-    gfx.rect(x + 4, y + 4, 8, 8, 1)
-  end
-  text(x + 24, y, label)
-  local tw = gfx.measurestr(label)
-  if inside(x, y, 24 + tw, 18) and clicked then return not value end
-  return value
-end
-
-local function number(x, y, value, caption)
-  if button(x, y - 3, 56, 22, tostring(value)) then return ask(caption, value) end
-  return value
-end
-
-local function channel_name(get, i)
-  local name = get(i)
-  return name and name ~= "" and name or tostring(i + 1)
-end
-
-local function draw()
-  local w, h = gfx.w, gfx.h
-  gfx.set(0.13, 0.13, 0.13, 1)
-  gfx.rect(0, 0, w, h, 1)
-  local n = o.selected and reaper.CountSelectedTracks(0) or (o.last - o.first + 1)
-  local y = 16
-
-  o.selected = checkbox(16, y, "Only selected tracks", o.selected)
-  y = y + 32
-  if o.selected then
-    text(16, y, string.format("%d tracks selected", n), 0.7, 0.7, 0.7)
-  else
-    text(16, y, "Tracks")
-    o.first = number(90, y, o.first, "First track")
-    text(154, y, "to")
-    o.last = math.max(number(180, y, o.last, "Last track"), o.first)
-    o.create = checkbox(256, y, "create missing tracks", o.create)
+  local function ask(caption, value)
+    local ok, v = reaper.GetUserInputs(TITLE, 1, caption, tostring(value))
+    v = ok and tonumber(v)
+    if v and v >= 1 then return math.floor(v) end
+    return value
   end
 
-  y = y + 40
-  o.inputs = checkbox(16, y, "Record inputs from input", o.inputs)
-  o.in1 = number(250, y, o.in1, "First record input")
-  if o.inputs and n > 0 then
-    local last = o.in1 + n - 1
-    text(320, y, string.format("%s ... %s", channel_name(reaper.GetInputChannelName, o.in1 - 1),
-      channel_name(reaper.GetInputChannelName, last - 1)), 0.7, 0.7, 0.7)
-    if last > reaper.GetNumAudioInputs() then
-      text(40, y + 20, string.format("The audio device has %d inputs.", reaper.GetNumAudioInputs()), 1, 0.5, 0.4)
+  local function load_names()
+    local ok, path = reaper.GetUserFileNameForRead("", "Track names: one per line, line N = track N", "txt")
+    if not ok then return end
+    local list, err = M.read_names(path)
+    if not list then
+      status = "Can't read " .. path .. (err and (": " .. err) or "")
+      return
+    end
+    o.names, o.names_file = list, path:match("[^\\/]+$")
+  end
+
+  local function save_names()
+    local _, projfn = reaper.EnumProjects(-1)
+    local dir = projfn and projfn:match("^(.*)[\\/]") or ""
+    local base = (reaper.GetProjectName(0) or ""):gsub("%.[Rr][Pp][Pp]$", "")
+    if base == "" then base = "tracks" end
+    local sep = dir:find("\\") and "\\" or "/"
+    local initial = dir ~= "" and (dir .. sep .. base .. "_names.txt") or (base .. "_names.txt")
+    local ok, path
+    if reaper.GetUserFileName then
+      ok, path = reaper.GetUserFileName(0, "Save track names", initial, "")
+    elseif dir ~= "" then
+      ok, path = true, initial
+    else
+      ok, path = reaper.GetUserInputs(TITLE, 1, "Save names to file (project not saved yet)", initial)
+    end
+    while ok and path ~= "" do
+      path = M.txt_path(path)
+      local probe = M.open(path, "r")
+      if probe then
+        probe:close()
+        if reaper.ShowMessageBox(path .. " exists. Overwrite it?", TITLE, 4) ~= 6 then return end
+      end
+      local good, named, total = M.write_names(path)
+      if good then
+        status = string.format("Saved %d names of %d tracks to %s", named, total, path:match("[^\\/]+$"))
+        return
+      end
+      status = "Can't write " .. path .. (named and (": " .. named) or "")
+      ok, path = reaper.GetUserInputs(TITLE, 1, "Can't write there. Save names to file", path)
     end
   end
 
-  y = y + 44
-  o.outs = checkbox(16, y, "Hardware outs from output", o.outs)
-  o.out1 = number(250, y, o.out1, "First hardware output")
-  if o.outs and n > 0 then
-    local last = o.out1 + n - 1
-    text(320, y, string.format("%s ... %s", channel_name(reaper.GetOutputChannelName, o.out1 - 1),
-      channel_name(reaper.GetOutputChannelName, last - 1)), 0.7, 0.7, 0.7)
-    if last > reaper.GetNumAudioOutputs() then
-      text(40, y + 20, string.format("The audio device has %d outputs.", reaper.GetNumAudioOutputs()), 1, 0.5, 0.4)
+  local function text(x, y, s, r, g, b)
+    gfx.set(r or 0.9, g or 0.9, b or 0.9, 1)
+    gfx.x, gfx.y = x, y
+    gfx.drawstr(s)
+  end
+
+  local function inside(x, y, w, h)
+    return gfx.mouse_x >= x and gfx.mouse_x < x + w and gfx.mouse_y >= y and gfx.mouse_y < y + h
+  end
+
+  local function button(x, y, w, h, label)
+    local over = inside(x, y, w, h)
+    local c = over and 0.38 or 0.27
+    gfx.set(c, c, c, 1)
+    gfx.rect(x, y, w, h, 1)
+    local tw, th = gfx.measurestr(label)
+    text(x + (w - tw) / 2, y + (h - th) / 2, label)
+    return over and clicked
+  end
+
+  local function checkbox(x, y, label, value)
+    gfx.set(0.8, 0.8, 0.8, 1)
+    gfx.rect(x, y, 16, 16, 0)
+    if value then
+      gfx.set(0.4, 0.75, 1, 1)
+      gfx.rect(x + 4, y + 4, 8, 8, 1)
     end
+    text(x + 24, y, label)
+    local tw = gfx.measurestr(label)
+    if inside(x, y, 24 + tw, 18) and clicked then return not value end
+    return value
   end
 
-  y = y + 44
-  o.master_off = checkbox(16, y, "Master send off", o.master_off)
-  y = y + 28
-  o.arm = checkbox(16, y, "Record arm", o.arm)
-  y = y + 28
-  o.mon_off = checkbox(16, y, "Input monitoring off (no echo to the outs while recording)", o.mon_off)
-
-  y = y + 40
-  if button(16, y - 3, 140, 24, o.names and "Other names file" or "Names file...") then load_names() end
-  if o.names then
-    text(170, y, o.names_file, 0.7, 0.7, 0.7)
-    if button(w - 236, y - 3, 80, 24, "No names") then o.names, o.names_file = nil, nil end
-  else
-    text(170, y, "names unchanged", 0.7, 0.7, 0.7)
+  local function number(x, y, value, caption)
+    if button(x, y - 3, 56, 22, tostring(value)) then return ask(caption, value) end
+    return value
   end
-  if button(w - 146, y - 3, 130, 24, "Save names...") then save_names() end
 
-  text(16, h - 74, "Unticked options leave the tracks as they are. Hardware outs replace existing ones.", 0.6, 0.6, 0.6)
-  text(16, h - 40, status, 0.6, 0.9, 0.6)
-  if button(w - 232, h - 46, 100, 30, "Apply") and n > 0 then apply() end
-  return button(w - 116, h - 46, 100, 30, "Close")
+  local function channel_name(get, i)
+    local name = get(i)
+    return name and name ~= "" and name or tostring(i + 1)
+  end
+
+  local function draw()
+    local w, h = gfx.w, gfx.h
+    gfx.set(0.13, 0.13, 0.13, 1)
+    gfx.rect(0, 0, w, h, 1)
+    local n = o.selected and reaper.CountSelectedTracks(0) or (o.last - o.first + 1)
+    local y = 16
+
+    o.selected = checkbox(16, y, "Only selected tracks", o.selected)
+    y = y + 32
+    if o.selected then
+      text(16, y, string.format("%d tracks selected", n), 0.7, 0.7, 0.7)
+    else
+      text(16, y, "Tracks")
+      o.first = number(90, y, o.first, "First track")
+      text(154, y, "to")
+      o.last = math.max(number(180, y, o.last, "Last track"), o.first)
+      o.create = checkbox(256, y, "create missing tracks", o.create)
+    end
+
+    y = y + 40
+    o.inputs = checkbox(16, y, "Record inputs from input", o.inputs)
+    o.in1 = number(250, y, o.in1, "First record input")
+    if o.inputs and n > 0 then
+      local last = o.in1 + n - 1
+      text(320, y, string.format("%s ... %s", channel_name(reaper.GetInputChannelName, o.in1 - 1),
+        channel_name(reaper.GetInputChannelName, last - 1)), 0.7, 0.7, 0.7)
+      if last > reaper.GetNumAudioInputs() then
+        text(40, y + 20, string.format("The audio device has %d inputs.", reaper.GetNumAudioInputs()), 1, 0.5, 0.4)
+      end
+    end
+
+    y = y + 44
+    o.outs = checkbox(16, y, "Hardware outs from output", o.outs)
+    o.out1 = number(250, y, o.out1, "First hardware output")
+    if o.outs and n > 0 then
+      local last = o.out1 + n - 1
+      text(320, y, string.format("%s ... %s", channel_name(reaper.GetOutputChannelName, o.out1 - 1),
+        channel_name(reaper.GetOutputChannelName, last - 1)), 0.7, 0.7, 0.7)
+      if last > reaper.GetNumAudioOutputs() then
+        text(40, y + 20, string.format("The audio device has %d outputs.", reaper.GetNumAudioOutputs()), 1, 0.5, 0.4)
+      end
+    end
+
+    y = y + 44
+    o.master_off = checkbox(16, y, "Master send off", o.master_off)
+    y = y + 28
+    o.arm = checkbox(16, y, "Record arm", o.arm)
+    y = y + 28
+    o.mon_off = checkbox(16, y, "Input monitoring off (no echo to the outs while recording)", o.mon_off)
+
+    y = y + 40
+    if button(16, y - 3, 140, 24, o.names and "Other names file" or "Names file...") then load_names() end
+    if o.names then
+      text(170, y, o.names_file, 0.7, 0.7, 0.7)
+      if button(w - 236, y - 3, 80, 24, "No names") then o.names, o.names_file = nil, nil end
+    else
+      text(170, y, "names unchanged", 0.7, 0.7, 0.7)
+    end
+    if button(w - 146, y - 3, 130, 24, "Save names...") then save_names() end
+
+    text(16, h - 74, "Unticked options leave the tracks as they are. Hardware outs replace existing ones.", 0.6, 0.6, 0.6)
+    text(16, h - 40, status, 0.6, 0.9, 0.6)
+    if button(w - 232, h - 46, 100, 30, "Apply") and n > 0 then status = M.apply(o) end
+    return button(w - 116, h - 46, 100, 30, "Close")
+  end
+
+  gfx.init(TITLE, 640, 420)
+  gfx.setfont(1, "Arial", 16)
+
+  local function loop()
+    local ch = gfx.getchar()
+    if ch < 0 or ch == 27 then
+      gfx.quit()
+      return
+    end
+    local down = gfx.mouse_cap % 2 == 1
+    clicked = prev_down and not down
+    prev_down = down
+    local close = draw()
+    gfx.update()
+    if close then
+      gfx.quit()
+      return
+    end
+    reaper.defer(loop)
+  end
+  loop()
 end
 
-gfx.init(TITLE, 640, 420)
-gfx.setfont(1, "Arial", 16)
-
-local function loop()
-  local ch = gfx.getchar()
-  if ch < 0 or ch == 27 then
-    gfx.quit()
-    return
-  end
-  local down = gfx.mouse_cap % 2 == 1
-  clicked = prev_down and not down
-  prev_down = down
-  local close = draw()
-  gfx.update()
-  if close then
-    gfx.quit()
-    return
-  end
-  reaper.defer(loop)
-end
-loop()
+if REAPER_ROUTING_TEST then return M end
+M.run()

@@ -40,6 +40,12 @@ in one session, **unconfirmed** by a controlled save.
   (direct I/O, not a channel direct out). The script names a recording channel after the lowest LV1 input fed by
   the same device channel.
 
+## ReaScripts and their tests
+
+Both scripts return their functions instead of opening a window when `REAPER_ROUTING_TEST` is set, so
+`tests/lua/run.lua` can drive them against `tests/lua/mock_reaper.lua`. The mock implements only the calls listed
+below, with the behaviour the API page describes; what REAPER does beyond that page still needs a run in REAPER.
+
 ## Cleanup ReaScript (`scripts/cleanup_silent_takes.lua`)
 
 Runs inside REAPER. API calls, all from the [ReaScript API](https://www.reaper.fm/sdk/reascript/reascripthelp.html)
@@ -68,7 +74,8 @@ for a root source), `GetMediaItemInfo_Value` (`D_POSITION`), `format_timestr`, `
   is skipped. A file that `io.open` can't open counts as missing only for `ENOENT` (2); other errors skip the take.
   Remove refuses when `EnumProjects(-1)` or `GetProjectStateChangeCount` differ from the scan. Each scan step
   stops if another project became active and skips a take `ValidatePtr2` no longer accepts (its item deleted). Every candidate has
-  its own checkbox, ticked by default. **Unconfirmed** in REAPER (added after the runs below).
+  its own checkbox, ticked by default. Covered by `tests/lua/test_cleanup.lua` against the REAPER mock;
+  **unconfirmed** in REAPER itself (added after the runs below).
 - File names come from the parent source when there is one (`GetMediaSourceParent`), so section and reversed
   takes resolve to their WAV file.
 - A file is deleted only when no take of any remaining item (active or not) uses it. Windows refuses to delete a file REAPER still has open;
@@ -99,5 +106,6 @@ project, returns its file name), `GetProjectName`, `GetUserFileName` (mode 0 = c
   `CreateTrackSend`'s return value); only when that worked are the old hardware outs removed, so a failure leaves
   the track's routing as it was.
 - Save names always writes `.txt`, checks every write and the close, and asks for another path when the file can't
-  be written. Load reads `.csv` first columns with `"..."` quoting and `""` escapes. **Unconfirmed** in REAPER.
+  be written. Load reads `.csv` first columns with `"..."` quoting and `""` escapes. Covered by
+  `tests/lua/test_route_tracks.lua`; **unconfirmed** in REAPER itself.
 - **Unconfirmed:** not yet run in REAPER.

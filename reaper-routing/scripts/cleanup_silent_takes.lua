@@ -2,29 +2,21 @@
 local TITLE = "Clean up silent takes"
 local BLOCK = 65536
 local SLICE = 0.03
+local ENOENT = 2
 
-local ok, db = reaper.GetUserInputs(TITLE, 1, "Silent below (dBFS)", "-80")
-if not ok then return end
-db = tonumber(db)
-if not db then
-  reaper.ShowMessageBox("Enter a level like -80.", TITLE, 0)
-  return
-end
-local limit = 10 ^ (db / 20)
+local M = { open = io.open, remove_file = os.remove }
 
 local function file_size(path)
-  local f = io.open(path, "rb")
+  local f = M.open(path, "rb")
   if not f then return 0 end
   local size = f:seek("end")
   f:close()
   return size or 0
 end
 
-local ENOENT = 2
-
-local function file_state(path)
+function M.file_state(path)
   if path == "" then return "ok" end
-  local f, _, code = io.open(path, "rb")
+  local f, _, code = M.open(path, "rb")
   if f then
     f:close()
     return "ok"
@@ -32,47 +24,49 @@ local function file_state(path)
   return code == ENOENT and "missing" or "error"
 end
 
-local function source_file(take)
+function M.source_file(take)
   local src = reaper.GetMediaItemTake_Source(take)
   return reaper.GetMediaSourceFileName(reaper.GetMediaSourceParent(src) or src)
 end
 
-local proj = reaper.EnumProjects(-1)
-local takes, multi, unreadable = {}, 0, 0
-for i = 0, reaper.CountMediaItems(0) - 1 do
-  local item = reaper.GetMediaItem(0, i)
-  local take = reaper.GetActiveTake(item)
-  if take and not reaper.TakeIsMIDI(take) then
-    local file = source_file(take)
-    local st = file_state(file)
-    if reaper.CountTakes(item) > 1 then
-      multi = multi + 1
-    elseif st == "error" then
-      unreadable = unreadable + 1
-    else
-      local track = reaper.GetMediaItem_Track(item)
-      local _, name = reaper.GetSetMediaTrackInfo_String(track, "P_NAME", "", false)
-      takes[#takes + 1] = {
-        item = item, take = take, track = track, name = name, file = file, missing = st == "missing",
-        at = reaper.format_timestr(reaper.GetMediaItemInfo_Value(item, "D_POSITION"), ""),
-        num = math.floor(reaper.GetMediaTrackInfo_Value(track, "IP_TRACKNUMBER")),
-      }
+function M.collect(db)
+  local ctx = {
+    db = db, limit = 10 ^ (db / 20), proj = reaper.EnumProjects(-1),
+    takes = {}, multi = 0, unreadable = 0, silent = {}, idx = 1, state = "scan", result = {},
+  }
+  for i = 0, reaper.CountMediaItems(0) - 1 do
+    local item = reaper.GetMediaItem(0, i)
+    local take = reaper.GetActiveTake(item)
+    if take and not reaper.TakeIsMIDI(take) then
+      if reaper.CountTakes(item) > 1 then
+        ctx.multi = ctx.multi + 1
+      else
+        local file = M.source_file(take)
+        local st = M.file_state(file)
+        if st == "error" then
+          ctx.unreadable = ctx.unreadable + 1
+        else
+          local track = reaper.GetMediaItem_Track(item)
+          local _, name = reaper.GetSetMediaTrackInfo_String(track, "P_NAME", "", false)
+          ctx.takes[#ctx.takes + 1] = {
+            item = item, take = take, track = track, name = name, file = file, missing = st == "missing",
+            at = reaper.format_timestr(reaper.GetMediaItemInfo_Value(item, "D_POSITION"), ""),
+            num = math.floor(reaper.GetMediaTrackInfo_Value(track, "IP_TRACKNUMBER")),
+          }
+        end
+      end
     end
   end
+  ctx.change = reaper.GetProjectStateChangeCount(0)
+  if #ctx.takes == 0 then ctx.state = "list" end
+  return ctx
 end
-local change = reaper.GetProjectStateChangeCount(0)
 
-local function skipped_note()
+function M.skipped_note(ctx)
   local notes = {}
-  if multi > 0 then notes[#notes + 1] = string.format("%d items with several takes skipped", multi) end
-  if unreadable > 0 then notes[#notes + 1] = string.format("%d takes skipped: file can't be read", unreadable) end
+  if ctx.multi > 0 then notes[#notes + 1] = string.format("%d items with several takes skipped", ctx.multi) end
+  if ctx.unreadable > 0 then notes[#notes + 1] = string.format("%d takes skipped: file can't be read", ctx.unreadable) end
   return table.concat(notes, ", ")
-end
-
-if #takes == 0 then
-  local note = skipped_note()
-  reaper.ShowMessageBox(note ~= "" and ("No audio takes to check: " .. note .. ".") or "The project has no audio takes.", TITLE, 0)
-  return
 end
 
 local function finish(t)
@@ -99,7 +93,7 @@ local function start(t)
   t.peak = 0
 end
 
-local function step(t)
+local function step(t, limit)
   if t.pos >= t.stop then
     finish(t)
     return
@@ -122,45 +116,45 @@ local function step(t)
     end
   end
   t.pos = t.pos + n / t.sr
+  if t.pos >= t.stop then finish(t) end
 end
 
-local state, idx = "scan", 1
-local silent, missing = {}, 0
-local delete_files, scroll, result = false, 0, {}
-local prev_down, clicked = false, false
+function M.stop(ctx)
+  local t = ctx.takes[ctx.idx]
+  if t and t.acc then finish(t) end
+end
 
-local function scan()
-  if reaper.EnumProjects(-1) ~= proj then
-    local t = takes[idx]
-    if t then finish(t) end
-    result = { "Another project was opened during the scan, so nothing was removed.", "Run the cleanup again." }
-    state = "done"
+function M.scan(ctx, budget)
+  if ctx.state ~= "scan" then return end
+  if reaper.EnumProjects(-1) ~= ctx.proj then
+    M.stop(ctx)
+    ctx.result = { "Another project was opened during the scan, so nothing was removed.", "Run the cleanup again." }
+    ctx.state = "done"
     return
   end
   local t0 = reaper.time_precise()
-  while state == "scan" and reaper.time_precise() - t0 < SLICE do
-    local t = takes[idx]
-    if not reaper.ValidatePtr2(proj, t.take, "MediaItem_Take*") then
+  repeat
+    local t = ctx.takes[ctx.idx]
+    if not reaper.ValidatePtr2(ctx.proj, t.take, "MediaItem_Take*") then
       if t.acc then reaper.DestroyAudioAccessor(t.acc) end
       t.acc, t.peak, t.done = nil, nil, true
     end
     if not t.started and not t.done then start(t) end
-    if not t.done then step(t) end
+    if not t.done then step(t, ctx.limit) end
     if t.done then
-      if t.peak and t.peak <= limit then
+      if t.peak and t.peak <= ctx.limit then
         t.size, t.selected = file_size(t.file), true
-        if t.missing then missing = missing + 1 end
-        silent[#silent + 1] = t
+        ctx.silent[#ctx.silent + 1] = t
       end
-      idx = idx + 1
-      if idx > #takes then state = "list" end
+      ctx.idx = ctx.idx + 1
+      if ctx.idx > #ctx.takes then ctx.state = "list" end
     end
-  end
+  until ctx.state ~= "scan" or (budget and reaper.time_precise() - t0 >= budget)
 end
 
-local function chosen()
+function M.chosen(ctx)
   local list, size, offline = {}, 0, 0
-  for _, t in ipairs(silent) do
+  for _, t in ipairs(ctx.silent) do
     if t.selected then
       list[#list + 1] = t
       size = size + t.size
@@ -170,175 +164,193 @@ local function chosen()
   return list, size, offline
 end
 
-local function files_in_use()
+function M.files_in_use()
   local inuse = {}
   for i = 0, reaper.CountMediaItems(0) - 1 do
     local item = reaper.GetMediaItem(0, i)
     for k = 0, reaper.CountTakes(item) - 1 do
       local take = reaper.GetTake(item, k)
-      if take then inuse[source_file(take)] = true end
+      if take then inuse[M.source_file(take)] = true end
     end
   end
   return inuse
 end
 
-local function remove()
-  local list, _, offline = chosen()
+function M.remove(ctx, delete_files)
+  ctx.state = "done"
+  if reaper.EnumProjects(-1) ~= ctx.proj or reaper.GetProjectStateChangeCount(0) ~= ctx.change then
+    ctx.result = { "The project changed after the scan, so nothing was removed.", "Run the cleanup again." }
+    return
+  end
+  local list, _, offline = M.chosen(ctx)
   reaper.Undo_BeginBlock()
   for _, t in ipairs(list) do reaper.DeleteTrackMediaItem(t.track, t.item) end
   reaper.Undo_EndBlock("Remove silent takes", -1)
   reaper.UpdateArrange()
   if not delete_files then
-    result = {
+    ctx.result = {
       string.format("Removed %d takes from the project. Ctrl+Z brings them back.", #list),
       offline > 0 and string.format("%d of them were offline (file missing).", offline) or "",
       "The WAV files are kept.",
     }
     return
   end
-  local inuse = files_in_use()
+  local inuse = M.files_in_use()
   local removed, failed, freed = 0, 0, 0
   for _, t in ipairs(list) do
     if not inuse[t.file] and not t.missing and t.file ~= "" then
       local size = file_size(t.file)
-      if os.remove(t.file) then
+      if M.remove_file(t.file) then
         removed, freed = removed + 1, freed + size
-        os.remove(t.file .. ".reapeaks")
+        M.remove_file(t.file .. ".reapeaks")
       else
         failed = failed + 1
       end
       inuse[t.file] = true
     end
   end
-  result = {
+  ctx.result = {
     string.format("Removed %d takes and deleted %d WAV files, %.0f MB.", #list, removed, freed / 1048576),
     "Save the project now: undo can't bring deleted audio back.",
   }
   if failed > 0 then
-    result[#result + 1] = string.format("%d files could not be deleted (still open).", failed)
-    result[#result + 1] = "Save, then use File > Clean current project directory."
+    ctx.result[#ctx.result + 1] = string.format("%d files could not be deleted (still open).", failed)
+    ctx.result[#ctx.result + 1] = "Save, then use File > Clean current project directory."
   end
 end
 
-local function text(x, y, s, r, g, b)
-  gfx.set(r or 0.9, g or 0.9, b or 0.9, 1)
-  gfx.x, gfx.y = x, y
-  gfx.drawstr(s)
-end
-
-local function inside(x, y, w, h)
-  return gfx.mouse_x >= x and gfx.mouse_x < x + w and gfx.mouse_y >= y and gfx.mouse_y < y + h
-end
-
-local function button(x, y, w, h, label)
-  local over = inside(x, y, w, h)
-  local c = over and 0.38 or 0.27
-  gfx.set(c, c, c, 1)
-  gfx.rect(x, y, w, h, 1)
-  local tw, th = gfx.measurestr(label)
-  text(x + (w - tw) / 2, y + (h - th) / 2, label)
-  return over and clicked
-end
-
-local function checkbox(x, y, label, value)
-  gfx.set(0.8, 0.8, 0.8, 1)
-  gfx.rect(x, y, 16, 16, 0)
-  if value then
-    gfx.set(0.4, 0.75, 1, 1)
-    gfx.rect(x + 4, y + 4, 8, 8, 1)
+function M.run()
+  local ok, db = reaper.GetUserInputs(TITLE, 1, "Silent below (dBFS)", "-80")
+  if not ok then return end
+  db = tonumber(db)
+  if not db then
+    reaper.ShowMessageBox("Enter a level like -80.", TITLE, 0)
+    return
   end
-  text(x + 24, y, label)
-  local tw = gfx.measurestr(label)
-  if inside(x, y, 24 + tw, 18) and clicked then return not value end
-  return value
-end
+  local ctx = M.collect(db)
+  if #ctx.takes == 0 then
+    local note = M.skipped_note(ctx)
+    reaper.ShowMessageBox(note ~= "" and ("No audio takes to check: " .. note .. ".") or "The project has no audio takes.", TITLE, 0)
+    return
+  end
 
-local function draw()
-  local w, h = gfx.w, gfx.h
-  gfx.set(0.13, 0.13, 0.13, 1)
-  gfx.rect(0, 0, w, h, 1)
-  if state == "scan" then
-    local t = takes[idx]
-    text(16, 16, string.format("Scanning take %d / %d: track %d %s", idx, #takes, t.num, t.name))
-    gfx.set(0.3, 0.3, 0.3, 1)
-    gfx.rect(16, 48, w - 32, 14, 1)
-    gfx.set(0.4, 0.75, 1, 1)
-    gfx.rect(16, 48, (w - 32) * (idx - 1) / #takes, 14, 1)
+  local delete_files, scroll = false, 0
+  local prev_down, clicked = false, false
+
+  local function text(x, y, s, r, g, b)
+    gfx.set(r or 0.9, g or 0.9, b or 0.9, 1)
+    gfx.x, gfx.y = x, y
+    gfx.drawstr(s)
+  end
+
+  local function inside(x, y, w, h)
+    return gfx.mouse_x >= x and gfx.mouse_x < x + w and gfx.mouse_y >= y and gfx.mouse_y < y + h
+  end
+
+  local function button(x, y, w, h, label)
+    local over = inside(x, y, w, h)
+    local c = over and 0.38 or 0.27
+    gfx.set(c, c, c, 1)
+    gfx.rect(x, y, w, h, 1)
+    local tw, th = gfx.measurestr(label)
+    text(x + (w - tw) / 2, y + (h - th) / 2, label)
+    return over and clicked
+  end
+
+  local function checkbox(x, y, label, value)
+    gfx.set(0.8, 0.8, 0.8, 1)
+    gfx.rect(x, y, 16, 16, 0)
+    if value then
+      gfx.set(0.4, 0.75, 1, 1)
+      gfx.rect(x + 4, y + 4, 8, 8, 1)
+    end
+    text(x + 24, y, label)
+    local tw = gfx.measurestr(label)
+    if inside(x, y, 24 + tw, 18) and clicked then return not value end
+    return value
+  end
+
+  local function draw()
+    local w, h = gfx.w, gfx.h
+    gfx.set(0.13, 0.13, 0.13, 1)
+    gfx.rect(0, 0, w, h, 1)
+    if ctx.state == "scan" then
+      local t = ctx.takes[ctx.idx]
+      text(16, 16, string.format("Scanning take %d / %d: track %d %s", ctx.idx, #ctx.takes, t.num, t.name))
+      gfx.set(0.3, 0.3, 0.3, 1)
+      gfx.rect(16, 48, w - 32, 14, 1)
+      gfx.set(0.4, 0.75, 1, 1)
+      gfx.rect(16, 48, (w - 32) * (ctx.idx - 1) / #ctx.takes, 14, 1)
+      return button(w - 116, h - 46, 100, 30, "Cancel")
+    end
+    if ctx.state == "done" then
+      for i, line in ipairs(ctx.result) do text(16, 16 + (i - 1) * 22, line) end
+      return button(w - 116, h - 46, 100, 30, "Close")
+    end
+    local note = M.skipped_note(ctx)
+    if #ctx.silent == 0 then
+      text(16, 16, string.format("No take is below %g dBFS or offline.", ctx.db))
+      if note ~= "" then text(16, 38, note, 0.9, 0.7, 0.4) end
+      return button(w - 116, h - 46, 100, 30, "Close")
+    end
+    local list, size, offline = M.chosen(ctx)
+    local head = string.format("%d of %d takes ticked, %.0f MB", #list, #ctx.silent, size / 1048576)
+    if offline > 0 then head = head .. string.format(", %d offline (file missing)", offline) end
+    text(16, 16, head)
+    if note ~= "" then text(16, 38, note, 0.9, 0.7, 0.4) end
+    local top, bottom, lh = 64, h - 100, 20
+    local rows = math.max(1, math.floor((bottom - top) / lh))
+    if gfx.mouse_wheel ~= 0 then
+      scroll = scroll - (gfx.mouse_wheel > 0 and 3 or -3)
+      gfx.mouse_wheel = 0
+    end
+    scroll = math.max(0, math.min(scroll, #ctx.silent - rows))
+    for i = 1, math.min(rows, #ctx.silent - scroll) do
+      local t = ctx.silent[i + scroll]
+      local y = top + (i - 1) * lh
+      local level = t.missing and "file missing (offline)" or t.peak > 0 and string.format("%.0f dBFS", 20 * math.log(t.peak) / math.log(10)) or "digital silence"
+      t.selected = checkbox(16, y, "", t.selected)
+      text(44, y, tostring(t.num))
+      text(84, y, t.name)
+      text(w - 370, y, t.at, 0.7, 0.7, 0.7)
+      text(w - 260, y, level, 0.7, 0.7, 0.7)
+      text(w - 100, y, string.format("%.0f MB", t.size / 1048576), 0.7, 0.7, 0.7)
+    end
+    if #ctx.silent > rows then
+      text(16, bottom + 4, string.format("scroll for more (%d-%d of %d)", scroll + 1, math.min(scroll + rows, #ctx.silent), #ctx.silent), 0.6, 0.6, 0.6)
+    end
+    delete_files = checkbox(16, h - 72, "Also delete the WAV files (can't be undone)", delete_files)
+    if #list > 0 and button(w - 232, h - 46, 100, 30, "Remove") then
+      M.remove(ctx, delete_files)
+      return false
+    end
     return button(w - 116, h - 46, 100, 30, "Cancel")
   end
-  if state == "done" then
-    for i, line in ipairs(result) do text(16, 16 + (i - 1) * 22, line) end
-    return button(w - 116, h - 46, 100, 30, "Close")
-  end
-  if #silent == 0 then
-    text(16, 16, string.format("No take is below %g dBFS or offline.", db))
-    if skipped_note() ~= "" then text(16, 38, skipped_note(), 0.9, 0.7, 0.4) end
-    return button(w - 116, h - 46, 100, 30, "Close")
-  end
-  local list, size, offline = chosen()
-  local head = string.format("%d of %d takes ticked, %.0f MB", #list, #silent, size / 1048576)
-  if offline > 0 then head = head .. string.format(", %d offline (file missing)", offline) end
-  text(16, 16, head)
-  if skipped_note() ~= "" then text(16, 38, skipped_note(), 0.9, 0.7, 0.4) end
-  local top, bottom, lh = 64, h - 100, 20
-  local rows = math.max(1, math.floor((bottom - top) / lh))
-  if gfx.mouse_wheel ~= 0 then
-    scroll = scroll - (gfx.mouse_wheel > 0 and 3 or -3)
-    gfx.mouse_wheel = 0
-  end
-  scroll = math.max(0, math.min(scroll, #silent - rows))
-  for i = 1, math.min(rows, #silent - scroll) do
-    local t = silent[i + scroll]
-    local y = top + (i - 1) * lh
-    local level = t.missing and "file missing (offline)" or t.peak > 0 and string.format("%.0f dBFS", 20 * math.log(t.peak) / math.log(10)) or "digital silence"
-    t.selected = checkbox(16, y, "", t.selected)
-    text(44, y, tostring(t.num))
-    text(84, y, t.name)
-    text(w - 370, y, t.at, 0.7, 0.7, 0.7)
-    text(w - 260, y, level, 0.7, 0.7, 0.7)
-    text(w - 100, y, string.format("%.0f MB", t.size / 1048576), 0.7, 0.7, 0.7)
-  end
-  if #silent > rows then
-    text(16, bottom + 4, string.format("scroll for more (%d-%d of %d)", scroll + 1, math.min(scroll + rows, #silent), #silent), 0.6, 0.6, 0.6)
-  end
-  delete_files = checkbox(16, h - 72, "Also delete the WAV files (can't be undone)", delete_files)
-  if #list > 0 and button(w - 232, h - 46, 100, 30, "Remove") then
-    if reaper.EnumProjects(-1) ~= proj or reaper.GetProjectStateChangeCount(0) ~= change then
-      result = { "The project changed after the scan, so nothing was removed.", "Run the cleanup again." }
-    else
-      remove()
+
+  reaper.atexit(function() M.stop(ctx) end)
+  gfx.init(TITLE, 620, 520)
+  gfx.setfont(1, "Arial", 16)
+
+  local function loop()
+    local ch = gfx.getchar()
+    if ch < 0 or ch == 27 then
+      gfx.quit()
+      return
     end
-    state = "done"
-    return false
+    local down = gfx.mouse_cap % 2 == 1
+    clicked = prev_down and not down
+    prev_down = down
+    M.scan(ctx, SLICE)
+    local close = draw()
+    gfx.update()
+    if close then
+      gfx.quit()
+      return
+    end
+    reaper.defer(loop)
   end
-  return button(w - 116, h - 46, 100, 30, "Cancel")
+  loop()
 end
 
-local function cleanup()
-  local t = takes[idx]
-  if t and t.acc then finish(t) end
-end
-reaper.atexit(cleanup)
-
-gfx.init(TITLE, 620, 520)
-gfx.setfont(1, "Arial", 16)
-
-local function loop()
-  local ch = gfx.getchar()
-  if ch < 0 or ch == 27 then
-    gfx.quit()
-    return
-  end
-  local down = gfx.mouse_cap % 2 == 1
-  clicked = prev_down and not down
-  prev_down = down
-  if state == "scan" then scan() end
-  local close = draw()
-  gfx.update()
-  if close then
-    gfx.quit()
-    return
-  end
-  reaper.defer(loop)
-end
-loop()
+if REAPER_ROUTING_TEST then return M end
+M.run()

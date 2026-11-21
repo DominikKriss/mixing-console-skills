@@ -63,5 +63,6 @@ offsets), `GetMediaItem_Track`, `GetSetMediaTrackInfo_String` (`P_NAME`), `GetMe
   script doesn't call it.
 - The Lua version isn't documented, so the script avoids `math.log(x, base)`.
 - 2026-11-21, owner, REAPER on Windows: the first version (list in a message box) listed tracks 33-64 without an LV1
-  patch as digital silence and unused stagebox inputs at about -80 dBFS (preamp noise). The window version is not
-  yet run in REAPER.
+  patch as digital silence and unused stagebox inputs at about -80 dBFS (preamp noise). Window version run by the
+  owner the same day: without the checkbox the takes leave the project and the WAVs stay; with it the WAVs are
+  deleted from disk while REAPER is open (no Windows file lock seen).

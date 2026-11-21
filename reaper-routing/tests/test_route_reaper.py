@@ -199,6 +199,12 @@ class Names(unittest.TestCase):
         self.assertEqual(rr.names_from_file(self.dir / "n.txt"), {1: "KICK", 2: "SN"})
         self.assertEqual(rr.names_from_file(self.dir / "n.csv"), {1: "KICK", 2: "SN"})
 
+    def test_rpp(self):
+        path = self.dir / "old.rpp"
+        src = project(3).replace('NAME ""', 'NAME "KICK"', 1).replace('NAME ""', "NAME 'say \"hi\"'", 1)
+        path.write_bytes(src.encode("utf-8"))
+        self.assertEqual(rr.names_from_file(path), {1: "KICK", 2: 'say "hi"', 3: ""})
+
     def test_unknown_suffix(self):
         with self.assertRaises(rr.Refuse):
             rr.names_from_file(self.dir / "n.xlsx")

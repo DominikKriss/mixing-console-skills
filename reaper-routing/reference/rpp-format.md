@@ -81,7 +81,9 @@ show). One undo step. API calls (same page as above): `CountTracks`, `GetTrack`,
 `B_MAINSEND`; documented through its Get counterpart), `GetTrackNumSends` / `RemoveTrackSend` (category 1 = hardware
 outputs), `CreateTrackSend` (destination nil = hardware output), `SetTrackSendInfo_Value` (`I_DSTCHAN`,
 `I_SRCCHAN`), `GetUserFileNameForRead`, `PreventUIRefresh`, `TrackList_AdjustWindows`, `GetNumAudioInputs`,
-`GetNumAudioOutputs`, `GetInputChannelName`, `GetOutputChannelName`.
+`GetNumAudioOutputs`, `GetInputChannelName`, `GetOutputChannelName`. Save names: `EnumProjects` (-1 = current
+project, returns its file name), `GetProjectName`, `GetUserFileName` (mode 0 = choose a new file; the script falls
+back to `GetUserInputs` where it is missing), `ShowMessageBox` before overwriting.
 
 - The new hardware out's index is read back with `GetTrackNumSends` after removing the old ones, not taken from
   `CreateTrackSend`'s return value.

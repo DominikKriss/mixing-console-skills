@@ -12,7 +12,7 @@ from route_reaper import Refuse, names_from_file  # noqa: E402
 
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("show", help="LV1 .emo, X32 .scn, WING .snap, .txt or .csv")
+    p.add_argument("show", help="LV1 .emo, X32 .scn, WING .snap, REAPER .rpp, .txt or .csv")
     p.add_argument("dest", help="text file to write (new file)")
     p.add_argument("--device", metavar="NAME", help="with an LV1 .emo: names from the patch to this DAW device")
     a = p.parse_args(argv)

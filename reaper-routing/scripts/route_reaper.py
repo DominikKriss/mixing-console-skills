@@ -120,13 +120,25 @@ def names_from_file(path, device=None):
             data = json.load(f)
         ch = data.get("ae_data", {}).get("ch", {})
         return {int(k): v["name"] for k, v in ch.items() if k.isdigit() and "name" in v}
+    if suffix == ".rpp":
+        with open(path, encoding="utf-8", newline="") as f:
+            text = f.read()
+        lines = text.split("\r\n" if "\r\n" in text else "\n")
+        names = {}
+        for t in read_tracks(lines):
+            for i in t.attrs.get("NAME", [])[:1]:
+                value = lines[i].strip()[4:].strip()
+                if len(value) >= 2 and value[0] in "\"'`" and value[-1] == value[0]:
+                    value = value[1:-1]
+                names[t.number] = value
+        return names
     if suffix in (".txt", ".csv", ""):
         with open(path, encoding="utf-8") as f:
             lines = [ln.rstrip("\r\n") for ln in f]
         while lines and not lines[-1].strip():
             lines.pop()
         return {i + 1: ln.split(",")[0].strip() if suffix == ".csv" else ln.strip() for i, ln in enumerate(lines)}
-    raise Refuse(f"{path.name}: names come from .emo, .scn, .snap, .txt or .csv.")
+    raise Refuse(f"{path.name}: names come from .emo, .scn, .snap, .rpp, .txt or .csv.")
 
 
 class Track:
@@ -268,7 +280,7 @@ def main(argv=None):
                    help="hardware outputs, e.g. 1-64 (1:1) or 1-8:33; repeatable")
     p.add_argument("--stereo", default="", metavar="TRACKS", help="tracks with a stereo input / output pair, e.g. 7,41-42")
     p.add_argument("--master", choices=["on", "off"], help="master / parent send")
-    p.add_argument("--names", metavar="FILE", help="track names from an LV1 .emo, X32 .scn, WING .snap or a text list")
+    p.add_argument("--names", metavar="FILE", help="track names from an LV1 .emo, X32 .scn, WING .snap, another REAPER .rpp or a text list")
     p.add_argument("--device", metavar="NAME",
                    help="with an LV1 .emo: name tracks from what LV1 patched to this SoundGrid DAW device")
     p.add_argument("--arm", metavar="TRACKS|all", help="record-arm these tracks (all = every track)")

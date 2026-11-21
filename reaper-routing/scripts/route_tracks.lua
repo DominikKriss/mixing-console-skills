@@ -1,4 +1,4 @@
--- Route tracks: record inputs, hardware outs, master send, arm, monitoring and names. Load in REAPER: Actions > Show action list > New action > Load ReaScript.
+-- Route tracks: record inputs, hardware outs, master send, arm, monitoring, and load / save track names. Load in REAPER: Actions > Show action list > New action > Load ReaScript.
 local TITLE = "Route tracks"
 local MONO = 1024
 
@@ -35,6 +35,41 @@ local function load_names()
   end
   f:close()
   o.names, o.names_file = list, path:match("[^\\/]+$")
+end
+
+local function save_names()
+  local _, projfn = reaper.EnumProjects(-1)
+  local dir = projfn and projfn:match("^(.*)[\\/]") or ""
+  local base = (reaper.GetProjectName(0) or ""):gsub("%.[Rr][Pp][Pp]$", "")
+  if base == "" then base = "tracks" end
+  local sep = dir:find("\\") and "\\" or "/"
+  local initial = dir ~= "" and (dir .. sep .. base .. "_names.txt") or (base .. "_names.txt")
+  local ok, path
+  if reaper.GetUserFileName then
+    ok, path = reaper.GetUserFileName(0, "Save track names", initial, "")
+  else
+    ok, path = reaper.GetUserInputs(TITLE, 1, "Save names to file", initial)
+  end
+  if not ok or path == "" then return end
+  if not path:lower():match("%.txt$") and not path:lower():match("%.csv$") then path = path .. ".txt" end
+  local probe = io.open(path, "r")
+  if probe then
+    probe:close()
+    if reaper.ShowMessageBox(path .. " exists. Overwrite it?", TITLE, 4) ~= 6 then return end
+  end
+  local f = io.open(path, "w")
+  if not f then
+    status = "Can't write " .. path
+    return
+  end
+  local count, named = reaper.CountTracks(0), 0
+  for i = 0, count - 1 do
+    local _, name = reaper.GetSetMediaTrackInfo_String(reaper.GetTrack(0, i), "P_NAME", "", false)
+    if name ~= "" then named = named + 1 end
+    f:write(name, "\n")
+  end
+  f:close()
+  status = string.format("Saved %d names of %d tracks to %s", named, count, path:match("[^\\/]+$"))
 end
 
 local function targets()
@@ -182,10 +217,11 @@ local function draw()
   if button(16, y - 3, 140, 24, o.names and "Other names file" or "Names file...") then load_names() end
   if o.names then
     text(170, y, o.names_file, 0.7, 0.7, 0.7)
-    if button(w - 96, y - 3, 80, 24, "No names") then o.names, o.names_file = nil, nil end
+    if button(w - 236, y - 3, 80, 24, "No names") then o.names, o.names_file = nil, nil end
   else
     text(170, y, "names unchanged", 0.7, 0.7, 0.7)
   end
+  if button(w - 146, y - 3, 130, 24, "Save names...") then save_names() end
 
   text(16, h - 74, "Unticked options leave the tracks as they are. Hardware outs replace existing ones.", 0.6, 0.6, 0.6)
   text(16, h - 40, status, 0.6, 0.9, 0.6)

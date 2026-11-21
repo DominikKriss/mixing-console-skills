@@ -36,7 +36,7 @@ python3 scripts/route_reaper.py SRC.rpp DEST.rpp [options]
 | `--out 1-64` | one hardware out per track, track N → out N (mono, from track channel 1). `--out 1-8:33` = outs 33-40. Repeatable. Replaces the track's existing hardware outs. |
 | `--stereo 7,41-42` | these tracks take an input pair and an output pair starting at the mapped channel (map them to odd channels). |
 | `--master off` | master / parent send off, so playback reaches only the hardware outs. `on` turns it back on. |
-| `--names FILE` | track names: `.emo` (LV1 inputs by index), `.scn` (X32 `/ch/NN/config`), `.snap` (WING `ch.N.name`), `.txt` (one per line), `.csv` (first column). Name N goes to track N. |
+| `--names FILE` | track names: `.emo` (LV1 inputs by index), `.scn` (X32 `/ch/NN/config`), `.snap` (WING `ch.N.name`), `.rpp` (another REAPER project's track names), `.txt` (one per line), `.csv` (first column). Name N goes to track N. |
 | `--device NAME` | with an LV1 `.emo`: name track N after what LV1 patched to channel N of this SoundGrid DAW device (the recording computer, as LV1's device list or its hostname shows it; case and `-` / `_` / spaces ignored). Stereo LV1 channels get ` L` / ` R`; unpatched channels keep their name. Use this whenever the recording went through an LV1 patch. |
 | `--arm all` / `--arm 1-40` | record-arm tracks. `--disarm 33-40` disarms (applied after `--arm`). |
 | `--monitor off` | record monitoring off (`on`, `tape` = not when playing), so armed tracks don't echo their input to the hardware outs. |
@@ -64,7 +64,8 @@ tracks LV1 doesn't feed; suggest those. Apply the answer with a second run on th
 [`scripts/route_tracks.lua`](scripts/route_tracks.lua) does the same routing in a REAPER window, without the
 command line: track range or selected tracks (creating missing tracks), record inputs and hardware outs from a first
 channel (it shows the audio device's channel names and warns past its channel count), master send off, record arm,
-monitoring off, and names from a text file (line N = track N). Unticked options leave tracks as they are; Apply is
+monitoring off, and names from a text file (line N = track N). **Save names...** writes the open project's
+track names to such a file, so an older project's names can go into a new one. Unticked options leave tracks as they are; Apply is
 one undo step. To get names from the show, run `python3 scripts/export_names.py show.emo names.txt --device REC-PC`
 (also `.scn`, `.snap`) and pick that file in the window. Load it like the cleanup script below.
 

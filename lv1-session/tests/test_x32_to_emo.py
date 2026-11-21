@@ -30,10 +30,9 @@ class Helpers(unittest.TestCase):
 class Report(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
         self.dir = Path(self.tmp.name)
 
-    def tearDown(self):
-        self.tmp.cleanup()
 
     def test_parse_names_and_headamps(self):
         scene = fixtures.write_scene(self.dir / "s.scn", {1: {"name": "KICK"}, 2: {"name": "SN"}},

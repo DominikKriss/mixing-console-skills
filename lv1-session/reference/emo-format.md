@@ -8,7 +8,7 @@ An LV1 `.emo` session (v17.3) is a plain SQLite database and can be edited with 
 
 ## Details
 
-- **Open read-only with** `sqlite3 "file:x.emo?immutable=1"`: plain `-readonly` fails with "unable to open database file". Sessions live in `/Users/Shared/Waves/eMotion/Sessions/`. `CurrentLV1.dat` (+ `-wal`) is LV1's live state; don't write to it.
+- **Open read-only with** `sqlite3 "file:x.emo?immutable=1"`: plain `-readonly` fails with "unable to open database file". Sessions live in `/Users/Shared/Waves/eMotion/Sessions/` (macOS); Waves documents `C:\Users\Public\Waves Audio\eMotion\Sessions\` on Windows (unconfirmed by a save here). `CurrentLV1.dat` (+ `-wal`) is LV1's live state; don't write to it.
 - **LV1 keeps the open session in memory.** Save writes that state over the file, so a script edit is lost unless the session is loaded again first. Edit a copy, then load it from the session menu.
 - **Objects:** `object` (`obj_type` → `cluster_type`: 0 Input, 1 Group, 2 Aux (FX), 6 Matrix, 25 Mon). The name is in `snapshot_chainer.name` per snapshot (-1 = Active, 0.. = stored).
 - **Nx (immersive IEM) Mon type:** `chainer.is_input_nx` 1 on the Mon aux. Without it the EMO-IEM plugin and the send rotate / width (`PARAM_AUX_SEND_ROTATE_NX_<slot>`, `..._WIDTH_NX_<slot>`) do nothing; copying the rack alone isn't enough. Positions are per input per Mon (slot numbering as the sends: Mon 1 = `_8`); the EMO-IEM plugin holds no positions.

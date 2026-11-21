@@ -131,9 +131,14 @@ class OutputGuard(unittest.TestCase):
             base = Path(d, "base.dmxf")
             base.write_bytes(b"not touched")
             sym, hard = Path(d, "sym.dmxf"), Path(d, "hard.dmxf")
-            sym.symlink_to(base)
+            outs = [base, hard]
             os.link(base, hard)
-            for out in (base, sym, hard):
+            try:
+                sym.symlink_to(base)
+                outs.append(sym)
+            except OSError:
+                pass
+            for out in outs:
                 with contextlib.redirect_stdout(io.StringIO()) as buf:
                     self.assertEqual(b.main([str(base), "layout.json", str(out)]), 1)
                 self.assertIn("not the base", buf.getvalue())

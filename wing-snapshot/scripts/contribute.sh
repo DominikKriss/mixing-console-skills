@@ -37,7 +37,8 @@ REPO=""
 if top="$(git -C "$SKILL_DIR" rev-parse --show-toplevel 2>/dev/null)" \
    && git -C "$top" remote get-url origin 2>/dev/null | grep -qi "$UPSTREAM"; then
   REPO="$top"
-  REL="$(python3 -c 'import os,sys; print(os.path.relpath(sys.argv[1], sys.argv[2]))' "$SKILL_DIR" "$REPO")"
+  REL="$(git -C "$SKILL_DIR" rev-parse --show-prefix)"
+  REL="${REL%/}"
 else
   TMP="$(mktemp -d)"
   KEEP_TMP=0
@@ -46,7 +47,9 @@ else
   REPO="$TMP/repo"
   REL="$SKILL_NAME"
   [ -d "$REPO/$REL" ] || { echo "upstream has no folder $REL" >&2; exit 3; }
-  rsync -a --delete --exclude '__pycache__' --exclude '.DS_Store' "$SKILL_DIR/" "$REPO/$REL/"
+  rm -rf "${REPO:?}/$REL"
+  cp -R "$SKILL_DIR" "$REPO/$REL"
+  find "$REPO/$REL" \( -name __pycache__ -o -name .DS_Store \) -prune -exec rm -rf {} +
   echo "note: this install is not a git clone; changes are compared with upstream main, so anything upstream added since you copied the skill shows as removed."
 fi
 

@@ -20,11 +20,22 @@ mkdir -p ~/.claude/skills
 for s in lv1-session wing-snapshot dm7-session; do ln -s ~/mixing-console-skills/$s ~/.claude/skills/$s; done
 ```
 
+On Windows (PowerShell; Claude Code on Windows runs skills through Git Bash), use folder junctions, which need no
+admin rights:
+
+```powershell
+git clone https://github.com/DominikKriss/mixing-console-skills.git $HOME\mixing-console-skills
+New-Item -ItemType Directory -Force $HOME\.claude\skills | Out-Null
+foreach ($s in 'lv1-session','wing-snapshot','dm7-session') {
+  New-Item -ItemType Junction -Path "$HOME\.claude\skills\$s" -Target "$HOME\mixing-console-skills\$s"
+}
+```
+
 Then ask Claude Code about your show, or run `/lv1-session`, `/wing-snapshot` or `/dm7-session`. `git -C ~/mixing-console-skills pull` updates.
 
 ## Requirements
 
-- Python 3 (standard library only). LV1: macOS, tested with LV1 17.3. WING: a snapshot from WING-Edit (tested with 3.2.1). DM7: a session from DM Editor 2.0.1 (firmware V2.01).
+- Python 3 (standard library only) on macOS, Windows or Linux; CI runs every skill's tests on all three. On Windows, Git for Windows (Git Bash) for `contribute.sh`. LV1: tested with LV1 17.3 on macOS. WING: a snapshot from WING-Edit (tested with 3.2.1). DM7: a session from DM Editor 2.0.1 (firmware V2.01).
 - The Waves plugins a skill works with installed through Waves Central (see each skill's README).
 
 ## Caution

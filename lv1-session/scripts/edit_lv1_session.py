@@ -191,11 +191,21 @@ def user_keys(s, e):
 
 
 def main(src, dst, edits_path):
-    e = json.load(open(edits_path))
+    e = json.load(open(edits_path, encoding="utf-8"))
     if "user_keys" in e and any("talkback" in k for k in e["user_keys"]) and "talkback" not in e:
         sys.exit("talkback user keys need the talkback edit in the same file")
     shutil.copyfile(src, dst)
     s = Session(dst)
+    try:
+        apply_edits(s, e)
+        s.db.commit()
+        ok, bad = check(s.cur)
+    finally:
+        s.db.close()
+    print(f"wrote {dst}, integrity: {ok}, presets with wrong ref_count: {bad}")
+
+
+def apply_edits(s, e):
     for kind, objs in e.get("names", {}).items():
         for n, name in objs.items():
             s.cur.execute("update snapshot_chainer set name=? where chainer_id=?", (name, s.oid(kind, int(n))))
@@ -209,10 +219,6 @@ def main(src, dst, edits_path):
         talkback(s, e["talkback"])
     if "user_keys" in e:
         user_keys(s, e["user_keys"])
-    s.db.commit()
-    ok, bad = check(s.cur)
-    s.db.close()
-    print(f"wrote {dst}, integrity: {ok}, presets with wrong ref_count: {bad}")
 
 
 if __name__ == "__main__":

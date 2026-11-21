@@ -13,13 +13,12 @@ import diff_lv1_sessions
 class Diff(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
         self.dir = Path(self.tmp.name)
         self.a = fixtures.make_session(self.dir / "a.emo")
         self.b = str(self.dir / "b.emo")
         shutil.copyfile(self.a, self.b)
 
-    def tearDown(self):
-        self.tmp.cleanup()
 
     def diff(self):
         out = io.StringIO()
@@ -29,6 +28,7 @@ class Diff(unittest.TestCase):
 
     def change(self, sql, *args):
         db = sqlite3.connect(self.b)
+        self.addCleanup(db.close)
         db.execute(sql, args)
         db.commit()
         db.close()

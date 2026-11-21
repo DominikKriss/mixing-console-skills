@@ -22,22 +22,24 @@ class SendSuffix(unittest.TestCase):
 class Check(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
         self.path = fixtures.make_session(Path(self.tmp.name) / "s.emo")
 
-    def tearDown(self):
-        self.tmp.cleanup()
 
     def test_clean_session(self):
         db = sqlite3.connect(self.path)
+        self.addCleanup(db.close)
         self.assertEqual(lv1db.check(db.cursor()), ("ok", 0))
 
     def test_wrong_ref_count_is_reported(self):
         db = sqlite3.connect(self.path)
+        self.addCleanup(db.close)
         db.execute("update plugin_preset set ref_count = ref_count + 1 where id = 1")
         self.assertEqual(lv1db.check(db.cursor())[1], 1)
 
     def test_open_ro_cannot_write(self):
         db = lv1db.open_ro(self.path)
+        self.addCleanup(db.close)
         with self.assertRaises(sqlite3.OperationalError):
             db.execute("update user_keys set key_action = 1")
 

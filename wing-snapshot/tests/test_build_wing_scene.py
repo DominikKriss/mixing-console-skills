@@ -15,15 +15,15 @@ EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 def run(layout, extra=None):
     with tempfile.TemporaryDirectory() as d:
         base, out, lay = Path(d, "base.snap"), Path(d, "out.snap"), Path(d, "layout.json")
-        base.write_text(fixtures.snapshot())
-        data = json.loads(Path(layout).read_text()) if isinstance(layout, (str, Path)) else layout
+        base.write_text(fixtures.snapshot(), encoding="utf-8")
+        data = json.loads(Path(layout).read_text(encoding="utf-8")) if isinstance(layout, (str, Path)) else layout
         if extra:
-            Path(d, "scene.scn").write_text(extra)
-        lay.write_text(json.dumps(data))
+            Path(d, "scene.scn").write_text(extra, encoding="utf-8")
+        lay.write_text(json.dumps(data), encoding="utf-8")
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
             code = b.main([str(base), str(lay), str(out)])
-        snap = json.loads(out.read_text()) if out.exists() else None
+        snap = json.loads(out.read_text(encoding="utf-8")) if out.exists() else None
         return code, buf.getvalue(), snap
 
 
@@ -61,7 +61,7 @@ class Examples(unittest.TestCase):
 
 class Guards(unittest.TestCase):
     def test_stereo_on_even_socket_refused(self):
-        lay = json.loads((EXAMPLES / "layout-explicit.example.json").read_text())
+        lay = json.loads((EXAMPLES / "layout-explicit.example.json").read_text(encoding="utf-8"))
         lay["inputs"][7]["src"] = ["A", 8]
         code, out, snap = run(lay)
         self.assertEqual(code, 1)
@@ -69,7 +69,7 @@ class Guards(unittest.TestCase):
         self.assertIsNone(snap)
 
     def test_premium_fx_outside_slots_1_8_refused(self):
-        lay = json.loads((EXAMPLES / "layout-auto.example.json").read_text())
+        lay = json.loads((EXAMPLES / "layout-auto.example.json").read_text(encoding="utf-8"))
         lay["fx"][0]["slot"] = 9
         code, out, _ = run(lay)
         self.assertEqual(code, 1)
@@ -81,7 +81,7 @@ class Guards(unittest.TestCase):
             snap.set("ch.1.nokey", 1)
 
     def test_unknown_group_member_refused(self):
-        lay = json.loads((EXAMPLES / "layout-explicit.example.json").read_text())
+        lay = json.loads((EXAMPLES / "layout-explicit.example.json").read_text(encoding="utf-8"))
         lay["groups"][0]["members"].append("NOBODY")
         code, out, _ = run(lay)
         self.assertEqual(code, 1)
@@ -89,7 +89,7 @@ class Guards(unittest.TestCase):
 
 class Outputs(unittest.TestCase):
     def test_auto_outputs_skip_explicit_sockets(self):
-        lay = json.loads((EXAMPLES / "layout-auto.example.json").read_text())
+        lay = json.loads((EXAMPLES / "layout-auto.example.json").read_text(encoding="utf-8"))
         lay["outputs"][0]["sock"] = ["A", 1]
         code, out, snap = run(lay)
         self.assertEqual(code, 0, out)
@@ -99,18 +99,21 @@ class Outputs(unittest.TestCase):
     def test_output_over_base_refused(self):
         with tempfile.TemporaryDirectory() as d:
             base = Path(d, "base.snap")
-            base.write_text(fixtures.snapshot())
+            base.write_text(fixtures.snapshot(), encoding="utf-8")
             link = Path(d, "link.snap")
-            link.symlink_to(base)
+            try:
+                link.symlink_to(base)
+            except OSError:
+                self.skipTest("symlinks need extra rights on this system")
             with contextlib.redirect_stdout(io.StringIO()):
                 code = b.main([str(base), str(EXAMPLES / "layout-auto.example.json"), str(link)])
             self.assertEqual(code, 1)
-            self.assertEqual(base.read_text(), fixtures.snapshot())
+            self.assertEqual(base.read_text(encoding="utf-8"), fixtures.snapshot())
 
 
 class MoreGuards(unittest.TestCase):
     def test_two_outputs_on_one_socket_refused(self):
-        lay = json.loads((EXAMPLES / "layout-explicit.example.json").read_text())
+        lay = json.loads((EXAMPLES / "layout-explicit.example.json").read_text(encoding="utf-8"))
         lay["outputs"][5]["sock"] = ["A", 14]
         code, out, _ = run(lay)
         self.assertEqual(code, 1)
@@ -119,22 +122,25 @@ class MoreGuards(unittest.TestCase):
     def test_output_over_layout_refused(self):
         with tempfile.TemporaryDirectory() as d:
             base, lay = Path(d, "base.snap"), Path(d, "layout.json")
-            base.write_text(fixtures.snapshot())
-            text = (EXAMPLES / "layout-auto.example.json").read_text()
-            lay.write_text(text)
+            base.write_text(fixtures.snapshot(), encoding="utf-8")
+            text = (EXAMPLES / "layout-auto.example.json").read_text(encoding="utf-8")
+            lay.write_text(text, encoding="utf-8")
             for out in (lay, Path(d, "sym.json"), Path(d, "hard.json")):
                 if out.name == "sym.json":
-                    out.symlink_to(lay)
+                    try:
+                        out.symlink_to(lay)
+                    except OSError:
+                        continue
                 elif out.name == "hard.json":
                     os.link(lay, out)
                 with contextlib.redirect_stdout(io.StringIO()):
                     self.assertEqual(b.main([str(base), str(lay), str(out)]), 1)
-            self.assertEqual(lay.read_text(), text)
+            self.assertEqual(lay.read_text(encoding="utf-8"), text)
 
 
 class X32(unittest.TestCase):
     def test_processing_from_scene(self):
-        lay = json.loads((EXAMPLES / "layout-auto.example.json").read_text())
+        lay = json.loads((EXAMPLES / "layout-auto.example.json").read_text(encoding="utf-8"))
         lay["processing"] = {"x32_scene": "scene.scn", "from_x32": {"ch.1": 1},
                              "lowcut_rest": {"freq": 120, "slope": "24", "eq_token": "CUT", "skip": ["BASS"]}}
         code, out, snap = run(lay, fixtures.SCENE)
@@ -153,7 +159,7 @@ class X32(unittest.TestCase):
 
 class X32EqOff(unittest.TestCase):
     def test_cut_stays_off_when_x32_eq_off(self):
-        lay = json.loads((EXAMPLES / "layout-auto.example.json").read_text())
+        lay = json.loads((EXAMPLES / "layout-auto.example.json").read_text(encoding="utf-8"))
         lay["processing"] = {"x32_scene": "scene.scn", "from_x32": {"ch.1": 1},
                              "lowcut_rest": {"freq": 120, "slope": "24", "eq_token": "CUT", "skip": []}}
         code, out, snap = run(lay, fixtures.SCENE.replace("/ch/01/eq ON", "/ch/01/eq OFF"))
@@ -161,7 +167,7 @@ class X32EqOff(unittest.TestCase):
         self.assertFalse(snap["ae_data"]["ch"]["1"]["flt"]["hc"])
 
     def test_preamp_low_cut_kept_when_eq_off_has_lcut(self):
-        lay = json.loads((EXAMPLES / "layout-auto.example.json").read_text())
+        lay = json.loads((EXAMPLES / "layout-auto.example.json").read_text(encoding="utf-8"))
         lay["processing"] = {"x32_scene": "scene.scn", "from_x32": {"ch.1": 1},
                              "lowcut_rest": {"freq": 120, "slope": "24", "eq_token": "CUT", "skip": []}}
         scene = fixtures.SCENE.replace("/ch/01/eq ON", "/ch/01/eq OFF").replace("HCut 8k00", "LCut 300.0")

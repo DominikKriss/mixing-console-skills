@@ -1,0 +1,4 @@
+* text=auto eol=lf
+*.emo binary
+*.dmxf binary
+*.dm7f binary

@@ -26,7 +26,7 @@ COLOR_TARGETS = {"mons": T_MON, "matrices": T_MATRIX, "fx": T_AUX, "groups": T_G
 
 
 def main(src, dst, layout_path, x32=None):
-    cfg = json.load(open(layout_path))
+    cfg = json.load(open(layout_path, encoding="utf-8"))
     inputs = [i if isinstance(i, str) else i["name"] for i in cfg["inputs"]]
     stereo_in = {i["name"] for i in cfg["inputs"] if isinstance(i, dict) and i.get("stereo")}
     rack_cfg = cfg.get("rack")
@@ -156,6 +156,8 @@ def main(src, dst, layout_path, x32=None):
     bad = cur.execute("select count(*) from plugin_preset pp where ref_count !="
                       " (select count(*) from snapshot_plugin sp where sp.preset_id=pp.id)").fetchone()[0]
     db.close()
+    if donor:
+        donor.close()
     print(f"wrote {dst} (snapshots {snaps}), integrity: {ok}, preset refs {refs[0]}/{refs[1]},"
           f" presets with wrong ref_count: {bad}")
 

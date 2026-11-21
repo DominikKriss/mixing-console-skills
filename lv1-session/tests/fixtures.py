@@ -97,7 +97,7 @@ def write_paramxml(directory):
     d.mkdir(parents=True, exist_ok=True)
     for plugin, names in EMO_PARAMS.items():
         body = "".join(f'  <Parameter Name="{n}"></Parameter>\n' for n in names)
-        (d / f"{plugin}-ParamXML.xml").write_text(f'<Parameter_List version="1">\n{body}</Parameter_List>\n')
+        (d / f"{plugin}-ParamXML.xml").write_text(f'<Parameter_List version="1">\n{body}</Parameter_List>\n', encoding="utf-8")
     return d
 
 

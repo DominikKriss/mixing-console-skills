@@ -31,6 +31,7 @@ LAYOUT = {
 class Build(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
         self.dir = Path(self.tmp.name)
         os.environ["LV1_EMO_PARAMXML_DIR"] = str(fixtures.write_paramxml(self.dir / "paramxml"))
         self.src = fixtures.make_session(self.dir / "src.emo")
@@ -38,15 +39,15 @@ class Build(unittest.TestCase):
 
     def tearDown(self):
         os.environ.pop("LV1_EMO_PARAMXML_DIR", None)
-        self.tmp.cleanup()
 
     def build(self, layout=LAYOUT, scene=None):
         path = self.dir / "layout.json"
-        path.write_text(json.dumps(layout))
+        path.write_text(json.dumps(layout), encoding="utf-8")
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             build_lv1_session.main(self.src, self.dst, str(path), scene)
         self.s = fixtures.Session(self.dst)
+        self.addCleanup(self.s.close)
         self.addCleanup(self.s.close)
         return out.getvalue()
 
@@ -106,6 +107,7 @@ class Build(unittest.TestCase):
 
     def test_mono_layout_input_on_a_stereo_source_input(self):
         db = sqlite3.connect(self.src)
+        self.addCleanup(db.close)
         oid = db.execute("select id from object where obj_type=0 and obj_index=0").fetchone()[0]
         rack.set_stereo(db.cursor(), oid, [-1])
         db.commit()
@@ -127,7 +129,7 @@ class Build(unittest.TestCase):
 
     def test_command_line(self):
         path = self.dir / "layout.json"
-        path.write_text(json.dumps(LAYOUT))
+        path.write_text(json.dumps(LAYOUT), encoding="utf-8")
         script = fixtures.SCRIPTS / "build_lv1_session.py"
         r = subprocess.run([sys.executable, str(script), self.src, self.dst, str(path)],
                            capture_output=True, text=True)

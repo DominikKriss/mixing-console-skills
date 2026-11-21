@@ -12,6 +12,13 @@ from lv1db import open_ro
 
 def load(path):
     c = open_ro(path)
+    try:
+        return _load(c)
+    finally:
+        c.close()
+
+
+def _load(c):
     ct = dict(c.execute("select id, name from cluster_type"))
     names = dict(c.execute("select chainer_id, name from snapshot_chainer where snapshot_id=-1"))
     objs = {oid: f"{ct.get(t, t)} {i + 1}" for oid, t, i in c.execute("select id, obj_type, obj_index from object")}

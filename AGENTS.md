@@ -34,6 +34,9 @@ from another skill's folder; shared helpers are copied (for example the X32 scen
   two saves, diffed), or "unconfirmed". Don't write a guess as a fact. When a user reports an editor load, record
   it in the skill's README status with editor version and date.
 - Never commit show files (`.emo`, `.snap`, `.dmxf`, `.dm7f`, `.scn`); `.gitignore` blocks them.
+- Scripts run on macOS, Windows and Linux: open text files with `encoding="utf-8"`, close every SQLite
+  connection (also on refusals; Windows locks open files), build paths with `pathlib`, keep shell scripts to what
+  Git Bash has (no `rsync`, no `python3` assumption). CI runs the tests on all three.
 - Tests: `for d in */tests; do python3 -m unittest discover -s "$d" -t "$d"; done` (CI runs the same, plus
   ShellCheck on `*/scripts/*.sh`). Add tests with every behaviour change.
 - No narrative code comments; keep only short non-obvious whys. Design reasoning goes in the PR.

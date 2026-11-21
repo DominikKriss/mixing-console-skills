@@ -1,11 +1,12 @@
 """Shared helpers for LV1 .emo sessions (SQLite)."""
 import sqlite3
+from pathlib import Path
 
 T = {"input": 0, "group": 1, "fx": 2, "matrix": 6, "cue": 7, "talkback": 8, "mon": 25}
 
 
 def open_ro(path):
-    return sqlite3.connect(f"file:{path}?immutable=1", uri=True)
+    return sqlite3.connect(Path(path).resolve().as_uri() + "?immutable=1", uri=True)
 
 
 def send_suffix(kind, index):

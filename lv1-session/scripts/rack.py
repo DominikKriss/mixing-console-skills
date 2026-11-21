@@ -7,6 +7,8 @@ import hashlib
 import re
 import sqlite3
 
+from lv1db import open_ro
+
 EMO = {"EMO-F2": ("CFLM", "CFLS"), "EMO-D5": ("CDYM", "CDYS"), "EMO-Q4": ("MQ4M", "MQ4S")}
 PARAMS_RE = re.compile(r'(<Parameters Type="RealWorld">)(.*?)(</Parameters>)', re.S)
 
@@ -68,10 +70,13 @@ class Donor:
     """Read-only view of a saved session to copy plugins from."""
 
     def __init__(self, path):
-        self.db = sqlite3.connect(f"file:{path}?immutable=1", uri=True)
+        self.db = open_ro(path)
         self.chan = {n: cid for cid, n in self.db.execute(
             "select o.id, sc.name from object o join snapshot_chainer sc on sc.chainer_id=o.id"
             " where o.obj_type=0 and sc.snapshot_id=-1")}
+
+    def close(self):
+        self.db.close()
 
     def plugin(self, channel, plugin_name):
         """(plug row dict, Active preset chunk) of plugin_name on the donor channel, or None."""

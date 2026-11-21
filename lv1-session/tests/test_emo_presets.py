@@ -67,18 +67,20 @@ class Q4Values(unittest.TestCase):
 class Apply(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
         self.dir = Path(self.tmp.name)
         os.environ["LV1_EMO_PARAMXML_DIR"] = str(fixtures.write_paramxml(self.dir / "paramxml"))
         self.path = fixtures.make_session(self.dir / "s.emo", snaps=(-1, 0))
 
     def tearDown(self):
         os.environ.pop("LV1_EMO_PARAMXML_DIR", None)
-        self.tmp.cleanup()
 
     def apply(self, **channel):
         scene = fixtures.write_scene(self.dir / "s.scn", {1: {"name": "KICK", **channel}})
         db = sqlite3.connect(self.path)
+        self.addCleanup(db.close)
         s = fixtures.Session(self.path)
+        self.addCleanup(s.close)
         report = ep.apply(db.cursor(), {0: s.oid(T_INPUT, 0)}, scene, {1: 0}, [-1, 0])
         db.commit()
         db.close()
@@ -86,7 +88,9 @@ class Apply(unittest.TestCase):
         return report
 
     def session(self):
-        return fixtures.Session(self.path)
+        s = fixtures.Session(self.path)
+        self.addCleanup(s.close)
+        return s
 
     def order(self):
         s = self.session()
@@ -136,6 +140,7 @@ class Apply(unittest.TestCase):
 
     def test_missing_emo_plugin_is_reported_not_a_crash(self):
         db = sqlite3.connect(self.path)
+        self.addCleanup(db.close)
         f2 = db.execute("select id from plug where plugin_name='EMO-F2' and chainer_id="
                         "(select id from object where obj_type=0 and obj_index=0)").fetchone()[0]
         db.execute("delete from snapshot_plugin where plug_id=?", (f2,))
@@ -150,6 +155,7 @@ class Apply(unittest.TestCase):
 
     def test_trim_above_ten_without_q4_reports_the_missing_gain(self):
         db = sqlite3.connect(self.path)
+        self.addCleanup(db.close)
         q4 = db.execute("select id from plug where plugin_name='EMO-Q4' and chainer_id="
                         "(select id from object where obj_type=0 and obj_index=0)").fetchone()[0]
         db.execute("delete from snapshot_plugin where plug_id=?", (q4,))
@@ -191,6 +197,7 @@ class Apply(unittest.TestCase):
 
     def test_bypassed_plugin_is_reported_and_left_bypassed(self):
         db = sqlite3.connect(self.path)
+        self.addCleanup(db.close)
         db.execute("update snapshot_plugin set bypass=1 where plug_id=(select id from plug where plugin_name="
                    "'EMO-Q4' and chainer_id=(select id from object where obj_type=0 and obj_index=0))")
         db.commit()

@@ -14,18 +14,22 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
       - name: Unit tests
         run: |
-          python3 --version
+          PY="$(command -v python3 || command -v python)"
+          "$PY" --version
           for d in */tests; do
-            python3 -m unittest discover -s "$d" -t "$d" -v
+            "$PY" -m unittest discover -s "$d" -t "$d" -v
           done
       - name: ADR index
         run: |

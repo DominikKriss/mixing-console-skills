@@ -1,4 +1,4 @@
--- Remove silent recorded takes, optionally deleting their WAV files. Load in REAPER: Actions > Show action list > New action > Load ReaScript.
+-- Remove silent takes and takes whose file is missing (offline), optionally deleting the silent WAV files. Load in REAPER: Actions > Show action list > New action > Load ReaScript.
 local TITLE = "Clean up silent takes"
 local BLOCK = 65536
 local SLICE = 0.03
@@ -20,6 +20,13 @@ local function file_size(path)
   return size or 0
 end
 
+local function exists(path)
+  local f = io.open(path, "rb")
+  if not f then return false end
+  f:close()
+  return true
+end
+
 local takes = {}
 for i = 0, reaper.CountMediaItems(0) - 1 do
   local item = reaper.GetMediaItem(0, i)
@@ -32,6 +39,7 @@ for i = 0, reaper.CountMediaItems(0) - 1 do
       num = math.floor(reaper.GetMediaTrackInfo_Value(track, "IP_TRACKNUMBER")),
       file = reaper.GetMediaSourceFileName(reaper.GetMediaItemTake_Source(take)),
     }
+    takes[#takes].missing = takes[#takes].file ~= "" and not exists(takes[#takes].file)
   end
 end
 if #takes == 0 then
@@ -45,9 +53,13 @@ local function finish(t)
 end
 
 local function start(t)
+  t.started = true
+  if t.missing then
+    t.peak, t.done = 0, true
+    return
+  end
   local src = reaper.GetMediaItemTake_Source(t.take)
   t.nch, t.sr = reaper.GetMediaSourceNumChannels(src), reaper.GetMediaSourceSampleRate(src)
-  t.started = true
   if t.nch < 1 or t.sr < 1 then
     t.done = true
     return
@@ -85,7 +97,7 @@ local function step(t)
 end
 
 local state, idx = "scan", 1
-local silent, used, bytes = {}, {}, 0
+local silent, used, bytes, missing = {}, {}, 0, 0
 local delete_files, scroll, result = false, 0, {}
 local prev_down, clicked = false, false
 
@@ -99,6 +111,7 @@ local function scan()
       if t.peak and t.peak <= limit then
         t.size = file_size(t.file)
         bytes = bytes + t.size
+        if t.missing then missing = missing + 1 end
         silent[#silent + 1] = t
       else
         used[t.file] = true
@@ -117,13 +130,14 @@ local function remove()
   if not delete_files then
     result = {
       string.format("Removed %d takes from the project. Ctrl+Z brings them back.", #silent),
+      missing > 0 and string.format("%d of them were offline (file missing).", missing) or "",
       "The WAV files are kept.",
     }
     return
   end
   local removed, failed, freed = 0, 0, 0
   for _, t in ipairs(silent) do
-    if not used[t.file] then
+    if not used[t.file] and not t.missing then
       local size = file_size(t.file)
       if os.remove(t.file) then
         removed, freed = removed + 1, freed + size
@@ -195,10 +209,12 @@ local function draw()
     return button(w - 116, h - 46, 100, 30, "Close")
   end
   if #silent == 0 then
-    text(16, 16, string.format("No take is below %g dBFS.", db))
+    text(16, 16, string.format("No take is below %g dBFS or offline.", db))
     return button(w - 116, h - 46, 100, 30, "Close")
   end
-  text(16, 16, string.format("%d silent takes below %g dBFS, %.0f MB", #silent, db, bytes / 1048576))
+  local head = string.format("%d silent takes below %g dBFS, %.0f MB", #silent - missing, db, bytes / 1048576)
+  if missing > 0 then head = head .. string.format(", %d offline (file missing)", missing) end
+  text(16, 16, head)
   local top, bottom, lh = 48, h - 100, 20
   local rows = math.max(1, math.floor((bottom - top) / lh))
   if gfx.mouse_wheel ~= 0 then
@@ -209,7 +225,7 @@ local function draw()
   for i = 1, math.min(rows, #silent - scroll) do
     local t = silent[i + scroll]
     local y = top + (i - 1) * lh
-    local level = t.peak > 0 and string.format("%.0f dBFS", 20 * math.log(t.peak) / math.log(10)) or "digital silence"
+    local level = t.missing and "file missing (offline)" or t.peak > 0 and string.format("%.0f dBFS", 20 * math.log(t.peak) / math.log(10)) or "digital silence"
     text(16, y, tostring(t.num))
     text(56, y, t.name)
     text(w - 260, y, level, 0.7, 0.7, 0.7)

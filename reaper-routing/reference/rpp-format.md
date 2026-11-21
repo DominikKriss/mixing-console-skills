@@ -58,6 +58,9 @@ offsets), `GetMediaItem_Track`, `GetSetMediaTrackInfo_String` (`P_NAME`), `GetMe
   the list of silent takes, a delete-files checkbox (off by default), Remove / Cancel.
 - A take is silent when its peak over the item (pre-FX, so track volume and FX don't matter) is at or below the
   threshold (default -80 dBFS). Scanning stops at the first sample above it, so tracks with audio are quick.
+- A take whose file no longer exists (offline in REAPER, e.g. after undoing a removal whose WAVs were deleted) is
+  listed as "file missing (offline)" whatever the threshold, and Remove takes it out of the project. Takes with no
+  file name (sources without a file) are left alone. **Unconfirmed** in REAPER.
 - A file is deleted only when no remaining item uses it. Windows refuses to delete a file REAPER still has open;
   the script then names REAPER's File > Clean current project directory, whose action ID isn't documented, so the
   script doesn't call it.

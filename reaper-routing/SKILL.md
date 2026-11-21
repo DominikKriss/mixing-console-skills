@@ -66,7 +66,9 @@ ReaScript [`scripts/cleanup_silent_takes.lua`](scripts/cleanup_silent_takes.lua)
 the user loads it once (Actions > Show action list > New action > Load ReaScript, then a toolbar button via right-click
 on the toolbar > Customize toolbar > Add, or a shortcut) and runs it. It asks for the threshold (default -80 dBFS),
 then opens a window with scan progress and the list of silent takes (track, level, size; digital silence = nothing
-patched, around -80 dBFS = an input with nothing playing). **Remove** takes the items out in one undo step; the
+patched, around -80 dBFS = an input with nothing playing), plus takes whose file is missing (offline, e.g. after
+undoing a removal whose WAVs were deleted), which the user would otherwise get a missing-file message for when
+reopening the project. **Remove** takes the items out in one undo step; the
 **Also delete the WAV files** checkbox (off by default) also deletes the files nothing else uses. After deleting,
 tell the user to save right away. If Windows keeps a file open, the window says so; then save and use File > Clean
 current project directory.

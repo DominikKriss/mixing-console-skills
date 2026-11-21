@@ -65,7 +65,8 @@ tracks LV1 doesn't feed; suggest those. Apply the answer with a second run on th
 command line: track range or selected tracks (creating missing tracks), record inputs and hardware outs from a first
 channel (it shows the audio device's channel names and warns past its channel count), master send off, record arm,
 monitoring off, and names from a text file (line N = track N). **Save names...** writes the open project's
-track names to such a file, so an older project's names can go into a new one. Unticked options leave tracks as they are; Apply is
+track names to such a file (a save dialog on REAPER versions that have one, else `<project>_names.txt` next to
+the project), so an older project's names can go into a new one. Unticked options leave tracks as they are; Apply is
 one undo step. To get names from the show, run `python3 scripts/export_names.py show.emo names.txt --device REC-PC`
 (also `.scn`, `.snap`) and pick that file in the window. Load it like the cleanup script below.
 

@@ -47,8 +47,10 @@ local function save_names()
   local ok, path
   if reaper.GetUserFileName then
     ok, path = reaper.GetUserFileName(0, "Save track names", initial, "")
+  elseif dir ~= "" then
+    ok, path = true, initial
   else
-    ok, path = reaper.GetUserInputs(TITLE, 1, "Save names to file", initial)
+    ok, path = reaper.GetUserInputs(TITLE, 1, "Save names to file (project not saved yet)", initial)
   end
   if not ok or path == "" then return end
   if not path:lower():match("%.txt$") and not path:lower():match("%.csv$") then path = path .. ".txt" end

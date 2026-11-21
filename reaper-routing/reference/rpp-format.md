@@ -82,8 +82,10 @@ show). One undo step. API calls (same page as above): `CountTracks`, `GetTrack`,
 outputs), `CreateTrackSend` (destination nil = hardware output), `SetTrackSendInfo_Value` (`I_DSTCHAN`,
 `I_SRCCHAN`), `GetUserFileNameForRead`, `PreventUIRefresh`, `TrackList_AdjustWindows`, `GetNumAudioInputs`,
 `GetNumAudioOutputs`, `GetInputChannelName`, `GetOutputChannelName`. Save names: `EnumProjects` (-1 = current
-project, returns its file name), `GetProjectName`, `GetUserFileName` (mode 0 = choose a new file; the script falls
-back to `GetUserInputs` where it is missing), `ShowMessageBox` before overwriting.
+project, returns its file name), `GetProjectName`, `GetUserFileName` (mode 0 = choose a new file), `ShowMessageBox` before overwriting.
+- `GetUserFileName` is on the v7.86 API page but missing in REAPER 7.35 (owner, 2026-11-21: the fallback ran). Without
+  it the script saves `<project>_names.txt` next to the project without asking (a `GetUserInputs` field only for a
+  project never saved).
 
 - The new hardware out's index is read back with `GetTrackNumSends` after removing the old ones, not taken from
   `CreateTrackSend`'s return value.

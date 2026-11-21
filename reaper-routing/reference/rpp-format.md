@@ -75,8 +75,7 @@ for a root source), `GetMediaItemInfo_Value` (`D_POSITION`), `format_timestr`, `
   the script then names REAPER's File > Clean current project directory, whose action ID isn't documented, so the
   script doesn't call it.
 - The Lua version isn't documented, so the script avoids `math.log(x, base)`.
-- Run in REAPER on Windows (2026-11-21): unpatched recording channels were listed as digital
-  silence and connected inputs with nothing playing at about -80 dBFS (preamp noise). Without the delete checkbox
+- Run in REAPER on Windows (2026-11-21): silent takes listed with their level. Without the delete checkbox
   the takes leave the project and the WAVs stay; with it the WAVs are deleted while REAPER is open (no Windows file
   lock seen).
 

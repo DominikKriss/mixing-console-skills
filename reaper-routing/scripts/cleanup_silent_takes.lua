@@ -61,8 +61,17 @@ for i = 0, reaper.CountMediaItems(0) - 1 do
   end
 end
 local change = reaper.GetProjectStateChangeCount(0)
+
+local function skipped_note()
+  local notes = {}
+  if multi > 0 then notes[#notes + 1] = string.format("%d items with several takes skipped", multi) end
+  if unreadable > 0 then notes[#notes + 1] = string.format("%d takes skipped: file can't be read", unreadable) end
+  return table.concat(notes, ", ")
+end
+
 if #takes == 0 then
-  reaper.ShowMessageBox("The project has no audio takes.", TITLE, 0)
+  local note = skipped_note()
+  reaper.ShowMessageBox(note ~= "" and ("No audio takes to check: " .. note .. ".") or "The project has no audio takes.", TITLE, 0)
   return
 end
 
@@ -263,16 +272,14 @@ local function draw()
   end
   if #silent == 0 then
     text(16, 16, string.format("No take is below %g dBFS or offline.", db))
+    if skipped_note() ~= "" then text(16, 38, skipped_note(), 0.9, 0.7, 0.4) end
     return button(w - 116, h - 46, 100, 30, "Close")
   end
   local list, size, offline = chosen()
   local head = string.format("%d of %d takes ticked, %.0f MB", #list, #silent, size / 1048576)
   if offline > 0 then head = head .. string.format(", %d offline (file missing)", offline) end
   text(16, 16, head)
-  local notes = {}
-  if multi > 0 then notes[#notes + 1] = string.format("%d items with several takes skipped", multi) end
-  if unreadable > 0 then notes[#notes + 1] = string.format("%d takes skipped: file can't be read", unreadable) end
-  if #notes > 0 then text(16, 38, table.concat(notes, ", "), 0.9, 0.7, 0.4) end
+  if skipped_note() ~= "" then text(16, 38, skipped_note(), 0.9, 0.7, 0.4) end
   local top, bottom, lh = 64, h - 100, 20
   local rows = math.max(1, math.floor((bottom - top) / lh))
   if gfx.mouse_wheel ~= 0 then

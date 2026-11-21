@@ -32,13 +32,18 @@ local function file_state(path)
   return code == ENOENT and "missing" or "error"
 end
 
+local function source_file(take)
+  local src = reaper.GetMediaItemTake_Source(take)
+  return reaper.GetMediaSourceFileName(reaper.GetMediaSourceParent(src) or src)
+end
+
 local proj = reaper.EnumProjects(-1)
 local takes, multi, unreadable = {}, 0, 0
 for i = 0, reaper.CountMediaItems(0) - 1 do
   local item = reaper.GetMediaItem(0, i)
   local take = reaper.GetActiveTake(item)
   if take and not reaper.TakeIsMIDI(take) then
-    local file = reaper.GetMediaSourceFileName(reaper.GetMediaItemTake_Source(take))
+    local file = source_file(take)
     local st = file_state(file)
     if reaper.CountTakes(item) > 1 then
       multi = multi + 1
@@ -49,6 +54,7 @@ for i = 0, reaper.CountMediaItems(0) - 1 do
       local _, name = reaper.GetSetMediaTrackInfo_String(track, "P_NAME", "", false)
       takes[#takes + 1] = {
         item = item, take = take, track = track, name = name, file = file, missing = st == "missing",
+        at = reaper.format_timestr(reaper.GetMediaItemInfo_Value(item, "D_POSITION"), ""),
         num = math.floor(reaper.GetMediaTrackInfo_Value(track, "IP_TRACKNUMBER")),
       }
     end
@@ -150,7 +156,7 @@ local function files_in_use()
     local item = reaper.GetMediaItem(0, i)
     for k = 0, reaper.CountTakes(item) - 1 do
       local take = reaper.GetTake(item, k)
-      if take then inuse[reaper.GetMediaSourceFileName(reaper.GetMediaItemTake_Source(take))] = true end
+      if take then inuse[source_file(take)] = true end
     end
   end
   return inuse
@@ -270,6 +276,7 @@ local function draw()
     t.selected = checkbox(16, y, "", t.selected)
     text(44, y, tostring(t.num))
     text(84, y, t.name)
+    text(w - 370, y, t.at, 0.7, 0.7, 0.7)
     text(w - 260, y, level, 0.7, 0.7, 0.7)
     text(w - 100, y, string.format("%.0f MB", t.size / 1048576), 0.7, 0.7, 0.7)
   end

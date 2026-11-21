@@ -23,6 +23,9 @@ def main(argv=None):
         names = names_from_file(a.show, a.device)
         if not names:
             raise Refuse("no names found.")
+        broken = [n for n, v in names.items() if "\n" in v or "\r" in v]
+        if broken:
+            raise Refuse(f"track {broken[0]}: the name has a line break; one name per line can't hold it.")
     except (Refuse, OSError, json.JSONDecodeError, sqlite3.Error) as e:
         print(f"refused: {e}", file=sys.stderr)
         return 1

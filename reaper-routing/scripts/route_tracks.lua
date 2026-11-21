@@ -18,6 +18,22 @@ local function ask(caption, value)
   return value
 end
 
+local function first_csv_field(line)
+  local s = line:match("^%s*(.*)$")
+  if s:sub(1, 1) ~= '"' then return s:match("^([^,]*)") end
+  local out, i = {}, 2
+  while i <= #s do
+    local c = s:sub(i, i)
+    if c == '"' then
+      if s:sub(i + 1, i + 1) ~= '"' then break end
+      out[#out + 1], i = '"', i + 2
+    else
+      out[#out + 1], i = c, i + 1
+    end
+  end
+  return table.concat(out)
+end
+
 local function load_names()
   local ok, path = reaper.GetUserFileNameForRead("", "Track names: one per line, line N = track N", "txt")
   if not ok then return end
@@ -30,10 +46,7 @@ local function load_names()
   local list = {}
   for line in f:lines() do
     line = line:gsub("\r$", "")
-    if csv then
-      local quoted = line:match('^%s*"(.-)"%s*,') or line:match('^%s*"(.-)"%s*$')
-      line = quoted and quoted:gsub('""', '"') or line:match("^([^,]*)")
-    end
+    if csv then line = first_csv_field(line) end
     list[#list + 1] = line:match("^%s*(.-)%s*$")
   end
   f:close()

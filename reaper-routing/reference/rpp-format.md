@@ -50,7 +50,8 @@ Runs inside REAPER. API calls, all from the [ReaScript API](https://www.reaper.f
 offsets), `GetMediaItem_Track`, `GetSetMediaTrackInfo_String` (`P_NAME`), `GetMediaTrackInfo_Value`
 (`IP_TRACKNUMBER`), `ShowMessageBox` (type 4 = Yes/No, 6 = Yes), `Undo_BeginBlock`, `Undo_EndBlock`,
 `DeleteTrackMediaItem`, `UpdateArrange`, `defer`, `atexit`, `time_precise`, `CountTakes`, `GetTake` (0-based),
-`GetProjectStateChangeCount`, `EnumProjects`. Window (same page, Lua built-ins): `gfx.init`,
+`GetProjectStateChangeCount`, `EnumProjects`, `GetMediaSourceParent` (parent of a section or reversed source, nil
+for a root source), `GetMediaItemInfo_Value` (`D_POSITION`), `format_timestr`. Window (same page, Lua built-ins): `gfx.init`,
 `gfx.quit`, `gfx.update`, `gfx.getchar` (-1 = window closed, 27 = Esc), `gfx.set`, `gfx.rect`, `gfx.drawstr`,
 `gfx.measurestr` (returns w, h), `gfx.setfont`, and the variables `gfx.x`, `gfx.y`, `gfx.w`, `gfx.h`, `gfx.mouse_x`,
 `gfx.mouse_y`, `gfx.mouse_cap` (1 = left button), `gfx.mouse_wheel` (the script resets it to 0).
@@ -67,6 +68,8 @@ offsets), `GetMediaItem_Track`, `GetSetMediaTrackInfo_String` (`P_NAME`), `GetMe
   is skipped. A file that `io.open` can't open counts as missing only for `ENOENT` (2); other errors skip the take.
   Remove refuses when `EnumProjects(-1)` or `GetProjectStateChangeCount` differ from the scan. Every candidate has
   its own checkbox, ticked by default. **Unconfirmed** in REAPER (added after the runs below).
+- File names come from the parent source when there is one (`GetMediaSourceParent`), so section and reversed
+  takes resolve to their WAV file.
 - A file is deleted only when no take of any remaining item (active or not) uses it. Windows refuses to delete a file REAPER still has open;
   the script then names REAPER's File > Clean current project directory, whose action ID isn't documented, so the
   script doesn't call it.
@@ -96,5 +99,5 @@ project, returns its file name), `GetProjectName`, `GetUserFileName` (mode 0 = c
   `CreateTrackSend`'s return value); only when that worked are the old hardware outs removed, so a failure leaves
   the track's routing as it was.
 - Save names always writes `.txt`, checks every write and the close, and asks for another path when the file can't
-  be written. Load reads `.csv` first columns with `"..."` quoting. **Unconfirmed** in REAPER.
+  be written. Load reads `.csv` first columns with `"..."` quoting and `""` escapes. **Unconfirmed** in REAPER.
 - **Unconfirmed:** not yet run in REAPER.

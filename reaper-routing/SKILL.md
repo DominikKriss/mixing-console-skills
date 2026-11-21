@@ -85,8 +85,8 @@ on the toolbar > Customize toolbar > Add, or a shortcut) and runs it. It asks fo
 then opens a window with scan progress and the list of silent takes (track, level, size; digital silence = nothing
 patched, around -80 dBFS = an input with nothing playing), plus takes whose file is missing (offline, e.g. after
 undoing a removal whose WAVs were deleted), which the user would otherwise get a missing-file message for when
-reopening the project. Every row has a checkbox (ticked by default) to keep a take out of the cleanup.
-**Remove** takes the ticked items out in one undo step; the **Also delete the WAV files** checkbox (off by
+reopening the project. Every row (track, item position, level, size) has a checkbox, ticked by default: ticked rows are
+the ones Remove takes out; untick a row to keep that take. **Remove** takes the ticked items out in one undo step; the **Also delete the WAV files** checkbox (off by
 default) also deletes their files when no take left in this project uses them. It checks only the open project:
 if another project uses the same WAV files (a copy of the project pointing at the same `Media` folder), deleting
 breaks it, so warn the user and suggest a backup first. Items with several takes and takes whose file can't be read

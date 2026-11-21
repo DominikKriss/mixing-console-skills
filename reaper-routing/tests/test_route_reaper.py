@@ -290,6 +290,17 @@ class ExportNames(unittest.TestCase):
             with contextlib.redirect_stderr(io.StringIO()):
                 self.assertEqual(export_names.main([str(scn), str(out)]), 1)
 
+    def test_multiline_name_refused(self):
+        import export_names
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "n.csv"
+            src.write_text('"Keys\nLead",1\nBass,2\n', encoding="utf-8")
+            out = Path(d) / "names.txt"
+            with contextlib.redirect_stderr(io.StringIO()) as err:
+                self.assertEqual(export_names.main([str(src), str(out)]), 1)
+            self.assertIn("line break", err.getvalue())
+            self.assertFalse(out.exists())
+
 
 if __name__ == "__main__":
     unittest.main()

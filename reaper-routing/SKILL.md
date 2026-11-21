@@ -63,16 +63,13 @@ tracks LV1 doesn't feed; suggest those. Apply the answer with a second run on th
 
 Takes that recorded only silence (a spare channel, a player that never started) still take disk space. The
 ReaScript [`scripts/cleanup_silent_takes.lua`](scripts/cleanup_silent_takes.lua) cleans them from inside REAPER:
-the user loads it once (Actions > Show action list > New action > Load ReaScript, optionally on a toolbar button
-or key), runs it, sets the threshold (default -80 dBFS) and whether to delete the files, checks the list (track,
-level, size) and confirms. It removes the items in one undo step and deletes the WAV files nothing else uses. Tell
-the user to save the project right after. If Windows keeps a file open, it says so; then save and use File > Clean
+the user loads it once (Actions > Show action list > New action > Load ReaScript, then a toolbar button via right-click
+on the toolbar > Customize toolbar > Add, or a shortcut) and runs it. It asks for the threshold (default -80 dBFS),
+then opens a window with scan progress and the list of silent takes (track, level, size; digital silence = nothing
+patched, around -80 dBFS = an input with nothing playing). **Remove** takes the items out in one undo step; the
+**Also delete the WAV files** checkbox (off by default) also deletes the files nothing else uses. After deleting,
+tell the user to save right away. If Windows keeps a file open, the window says so; then save and use File > Clean
 current project directory.
-
-The script prints one row per track (name, input, output, master, armed). Check it with the user against the
-console patch. Without `--device`, names follow the console's channel order and are right only when the
-recording channels are patched 1:1 to the console channels; with an LV1 session, ask which device recorded and use
-`--device` (a wrong name lists the DAW devices in the session).
 
 ## Learn from the run: offer a pull request
 

@@ -49,12 +49,19 @@ Runs inside REAPER. API calls, all from the [ReaScript API](https://www.reaper.f
 (interleaved, pre-FX; returns -1 on error), `DestroyAudioAccessor`, `new_array` (`.clear`, `.table` with 1-based
 offsets), `GetMediaItem_Track`, `GetSetMediaTrackInfo_String` (`P_NAME`), `GetMediaTrackInfo_Value`
 (`IP_TRACKNUMBER`), `ShowMessageBox` (type 4 = Yes/No, 6 = Yes), `Undo_BeginBlock`, `Undo_EndBlock`,
-`DeleteTrackMediaItem`, `UpdateArrange`.
+`DeleteTrackMediaItem`, `UpdateArrange`, `defer`, `atexit`, `time_precise`. Window (same page, Lua built-ins): `gfx.init`,
+`gfx.quit`, `gfx.update`, `gfx.getchar` (-1 = window closed, 27 = Esc), `gfx.set`, `gfx.rect`, `gfx.drawstr`,
+`gfx.measurestr` (returns w, h), `gfx.setfont`, and the variables `gfx.x`, `gfx.y`, `gfx.w`, `gfx.h`, `gfx.mouse_x`,
+`gfx.mouse_y`, `gfx.mouse_cap` (1 = left button), `gfx.mouse_wheel` (the script resets it to 0).
 
+- A threshold prompt, then a window: scan progress (a few blocks per `defer` cycle, so REAPER stays responsive),
+  the list of silent takes, a delete-files checkbox (off by default), Remove / Cancel.
 - A take is silent when its peak over the item (pre-FX, so track volume and FX don't matter) is at or below the
   threshold (default -80 dBFS). Scanning stops at the first sample above it, so tracks with audio are quick.
 - A file is deleted only when no remaining item uses it. Windows refuses to delete a file REAPER still has open;
   the script then names REAPER's File > Clean current project directory, whose action ID isn't documented, so the
   script doesn't call it.
 - The Lua version isn't documented, so the script avoids `math.log(x, base)`.
-- **Unconfirmed:** not yet run in REAPER.
+- 2026-11-21, owner, REAPER on Windows: the first version (list in a message box) listed tracks 33-64 without an LV1
+  patch as digital silence and unused stagebox inputs at about -80 dBFS (preamp noise). The window version is not
+  yet run in REAPER.

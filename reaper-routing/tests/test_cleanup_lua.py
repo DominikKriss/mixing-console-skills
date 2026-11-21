@@ -18,7 +18,12 @@ class LuaSyntax(unittest.TestCase):
         reference = (SCRIPT.parent.parent / "reference" / "rpp-format.md").read_text(encoding="utf-8")
         import re
         for call in sorted(set(re.findall(r"reaper\.(\w+)", text))):
-            self.assertIn(call, reference, f"reaper.{call} is not in reference/rpp-format.md")
+            self.assertIn(f"`{call}`", reference, f"reaper.{call} is not in reference/rpp-format.md")
+        for call in sorted(set(re.findall(r"gfx\.(\w+)", text))):
+            self.assertIn(f"`gfx.{call}`", reference, f"gfx.{call} is not in reference/rpp-format.md")
+
+    def test_delete_is_off_by_default(self):
+        self.assertIn("local delete_files, scroll, result = false", SCRIPT.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

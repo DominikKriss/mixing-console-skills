@@ -85,7 +85,7 @@ outputs), `CreateTrackSend` (destination nil = hardware output), `SetTrackSendIn
 project, returns its file name), `GetProjectName`, `GetUserFileName` (mode 0 = choose a new file), `ShowMessageBox` before overwriting.
 - `GetUserFileName` is on the v7.86 API page but missing in REAPER 7.35 (owner, 2026-11-21: the fallback ran). Without
   it the script saves `<project>_names.txt` next to the project without asking (a `GetUserInputs` field only for a
-  project never saved).
+  project never saved). Confirmed by the owner in REAPER 7.35 (2026-11-21).
 
 - The new hardware out's index is read back with `GetTrackNumSends` after removing the old ones, not taken from
   `CreateTrackSend`'s return value.

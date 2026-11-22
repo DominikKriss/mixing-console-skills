@@ -74,8 +74,10 @@ for a root source), `GetMediaItemInfo_Value` (`D_POSITION`), `format_timestr`, `
   is skipped. A file that `io.open` can't open counts as missing only for `ENOENT` (2); other errors skip the take.
   Remove refuses when `EnumProjects(-1)` or `GetProjectStateChangeCount` differ from the scan. Each scan step
   stops if another project became active and skips a take `ValidatePtr2` no longer accepts (its item deleted). Every candidate has
-  its own checkbox, ticked by default. Covered by `tests/lua/test_cleanup.lua` against the REAPER mock;
-  **unconfirmed** in REAPER itself (added after the runs below).
+  its own checkbox, ticked by default. Covered by `tests/lua/test_cleanup.lua` against the REAPER mock.
+  Confirmed by the owner in REAPER on Windows (2026-11-22): an item deleted during the scan is skipped without
+  errors, Remove works on an unchanged project, an unticked row is kept. The multi-take skip is **not yet run in
+  REAPER** (mock test only).
 - File names come from the parent source when there is one (`GetMediaSourceParent`), so section and reversed
   takes resolve to their WAV file.
 - A file is deleted only when no take of any remaining item (active or not) uses it. Windows refuses to delete a file REAPER still has open;
@@ -102,6 +104,8 @@ project, returns its file name), `GetProjectName`, `GetUserFileName` (mode 0 = c
   it the script saves `<project>_names.txt` next to the project without asking (a `GetUserInputs` field only for a
   project never saved). Confirmed by the owner in REAPER 7.35 (2026-11-21).
 
+- Confirmed by the owner in REAPER on Windows (2026-11-22): Apply on a track with existing hardware outs leaves
+  exactly the new one.
 - The new hardware out is created first and its index read back with `GetTrackNumSends` (not taken from
   `CreateTrackSend`'s return value); only when that worked are the old hardware outs removed, so a failure leaves
   the track's routing as it was.

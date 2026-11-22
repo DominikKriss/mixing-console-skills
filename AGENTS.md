@@ -51,7 +51,8 @@ from another skill's folder; shared helpers are copied (for example the X32 scen
   Git Bash has (no `rsync`, no `python3` assumption). CI runs the tests on all three.
 - Tests: `PY=""; for c in python3 python; do if "$c" -c "" >/dev/null 2>&1; then PY="$c"; break; fi; done; for d in */tests; do "$PY" -m unittest discover -s "$d" -t "$d"; done` (CI runs the same, plus
   ShellCheck on `*/scripts/*.sh`). Add tests with every behaviour change. ReaScripts (`*.lua`) are tested against
-  a mock of the REAPER API (`reaper-routing/tests/lua/`, `lua tests/lua/run.lua`); the unittest run calls it when
+  a mock of the REAPER API (`reaper-routing/tests/lua/`; from the repository root `lua reaper-routing/tests/lua/run.lua`, which finds its
+  files from its own path); the unittest run calls it when
   Lua is installed, and CI installs Lua 5.4 on Linux and fails without it (`REQUIRE_LUA=1`).
 - No narrative code comments; keep only short non-obvious whys. Design reasoning goes in the PR.
 - `main` is protected: changes go through a pull request the maintainer reviews and merges.

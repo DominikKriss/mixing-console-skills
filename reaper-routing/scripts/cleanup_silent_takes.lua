@@ -42,10 +42,10 @@ function M.collect(db)
         ctx.multi = ctx.multi + 1
       else
         local file = M.source_file(take)
-        local st = M.file_state(file)
+        local st = file ~= "" and M.file_state(file) or nil
         if st == "error" then
           ctx.unreadable = ctx.unreadable + 1
-        else
+        elseif st then
           local track = reaper.GetMediaItem_Track(item)
           local _, name = reaper.GetSetMediaTrackInfo_String(track, "P_NAME", "", false)
           ctx.takes[#ctx.takes + 1] = {

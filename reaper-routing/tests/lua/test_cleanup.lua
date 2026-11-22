@@ -165,6 +165,35 @@ test("cleanup: a project change after the scan blocks Remove", function()
   truthy(ctx.result[1]:find("changed after the scan", 1, true), "message")
 end)
 
+test("cleanup: audio sources without a file name are left alone", function()
+  local M, P, tr = setup()
+  local fileless = P.add_item(tr, { P.take(P.source({ file = "", samples = SILENT })) }, 1)
+  item(P, tr, SILENT)
+  local gone = missing_path()
+  item(P, tr, LOUD, gone)
+  local ctx = scan(M)
+  eq(#ctx.silent, 2, "silent file and missing file stay candidates")
+  for _, t in ipairs(ctx.silent) do truthy(t.item ~= fileless, "file-less source not a candidate") end
+  M.remove(ctx, false)
+  eq(#P.items, 1, "items left")
+  eq(P.items[1], fileless, "file-less item kept")
+end)
+
+test("cleanup: switching project with an audio reader open closes it", function()
+  local M, P, tr = setup()
+  local long = {}
+  for i = 1, 70000 do long[i] = 0 end
+  item(P, tr, long)
+  local ctx = M.collect(-80)
+  M.scan(ctx, 0)
+  eq(ctx.idx, 1, "first take still being read")
+  eq(P.open_accessors, 1, "reader open")
+  P.current = { id = "other" }
+  M.scan(ctx)
+  eq(ctx.state, "done", "state")
+  eq(P.open_accessors, 0, "reader closed")
+end)
+
 test("cleanup: read errors keep the take", function()
   local M, P, tr = setup()
   local it = item(P, tr, SILENT)

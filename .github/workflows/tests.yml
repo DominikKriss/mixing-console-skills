@@ -24,7 +24,12 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
+      - name: Lua for the ReaScript tests
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q lua5.4
       - name: Unit tests
+        env:
+          REQUIRE_LUA: ${{ runner.os == 'Linux' && '1' || '' }}
         run: |
           PY=""; for c in python3 python; do if "$c" -c "" >/dev/null 2>&1; then PY="$c"; break; fi; done
           "$PY" --version

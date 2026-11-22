@@ -72,14 +72,14 @@ if [ -z "$CHANGED" ]; then
   fi
 fi
 PENDING="$(git status --porcelain -z --untracked-files=all -- "$REL" | tr '\0' '\n')"
-if grep -Eiq '\.(emo|scn|dat|snap|dmxf|dm7f)$|__pycache__' <<<"$PENDING"; then
+if grep -Eiq '\.(emo|scn|dat|snap|dmxf|dm7f|rpp|rpp-bak)$|__pycache__' <<<"$PENDING"; then
   echo "refusing: session / scene files are among the changes; keep them out of the skill folder" >&2
   exit 4
 fi
 HISTORY_HIT=0 HISTORY_OUTSIDE=0
 for c in $(git rev-list "$UPSTREAM_MAIN..HEAD"); do
   NAMES="$(git diff-tree -r -m --root --no-commit-id --name-only -z "$c" | tr '\0' '\n')"
-  if grep -Eiq '\.(emo|scn|dat|snap|dmxf|dm7f)$' <<<"$NAMES"; then HISTORY_HIT=1; fi
+  if grep -Eiq '\.(emo|scn|dat|snap|dmxf|dm7f|rpp|rpp-bak)$' <<<"$NAMES"; then HISTORY_HIT=1; fi
   OUTSIDE_NAMES="$(grep -v -e '^$' -e "^$REL/" <<<"$NAMES" || true)"
   if [ -n "$OUTSIDE_NAMES" ]; then HISTORY_OUTSIDE=1; fi
 done

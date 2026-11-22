@@ -10,6 +10,7 @@ Each skill reads and writes the console's own show file (LV1 `.emo` SQLite sessi
 |---|---|
 | [`lv1-session`](lv1-session/) | Build a session from a layout (inputs, IEM / monitor mixes, FX, matrices), convert Behringer X32 channel processing to eMo F2 / D5 / Q4, edit a session you already worked on (copy a mix's setup to other mixes, Nx IEM, talkback, user keys), and review what changed between two sessions. |
 | [`wing-snapshot`](wing-snapshot/) | Build a WING snapshot from a layout on a WING-Edit INIT save: names, colours, AES50 / local patch with stereo sockets, monitor, group and FX buses, inserts, matrices, DCAs, output patch, and X32 channel processing. |
+| [`reaper-routing`](reaper-routing/) | Route a REAPER project for multitrack recording and virtual soundcheck: record inputs and hardware outs for every track (1:1, offset, stereo pairs), master send off, track names from the LV1 / X32 / WING show, record arm in one project, and a REAPER action that deletes silent takes. |
 | [`dm7-session`](dm7-session/) | Build a DM7 session from a layout on a DM Editor 2.0.1 session: names, pairs, Dante / Tio patch, monitor and FX mixes, FX routing, matrices, Dante outputs, and X32 channel processing. |
 
 ## Install
@@ -17,7 +18,7 @@ Each skill reads and writes the console's own show file (LV1 `.emo` SQLite sessi
 ```sh
 git clone https://github.com/DominikKriss/mixing-console-skills.git ~/mixing-console-skills
 mkdir -p ~/.claude/skills
-for s in lv1-session wing-snapshot dm7-session; do ln -s ~/mixing-console-skills/$s ~/.claude/skills/$s; done
+for s in lv1-session wing-snapshot dm7-session reaper-routing; do ln -s ~/mixing-console-skills/$s ~/.claude/skills/$s; done
 ```
 
 On Windows (PowerShell; Claude Code on Windows runs skills through Git Bash), use folder junctions, which need no
@@ -26,12 +27,12 @@ admin rights:
 ```powershell
 git clone https://github.com/DominikKriss/mixing-console-skills.git $HOME\mixing-console-skills
 New-Item -ItemType Directory -Force $HOME\.claude\skills | Out-Null
-foreach ($s in 'lv1-session','wing-snapshot','dm7-session') {
+foreach ($s in 'lv1-session','wing-snapshot','dm7-session','reaper-routing') {
   New-Item -ItemType Junction -Path "$HOME\.claude\skills\$s" -Target "$HOME\mixing-console-skills\$s"
 }
 ```
 
-Then ask Claude Code about your show, or run `/lv1-session`, `/wing-snapshot` or `/dm7-session`. `git -C ~/mixing-console-skills pull` updates (PowerShell: `git -C "$HOME\mixing-console-skills" pull`).
+Then ask Claude Code about your show, or run `/lv1-session`, `/wing-snapshot`, `/dm7-session` or `/reaper-routing`. `git -C ~/mixing-console-skills pull` updates (PowerShell: `git -C "$HOME\mixing-console-skills" pull`).
 
 ## Requirements
 

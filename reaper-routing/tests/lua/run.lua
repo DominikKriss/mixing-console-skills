@@ -1,4 +1,4 @@
--- Runs the ReaScript tests against mock_reaper.lua: lua tests/lua/run.lua (from the skill folder or anywhere).
+-- Runs the ReaScript tests against mock_reaper.lua. It finds its files from its own path: `lua tests/lua/run.lua` from the skill folder, `lua reaper-routing/tests/lua/run.lua` from the repository root.
 local here = (arg and arg[0] or ""):match("^(.*)[/\\]") or "."
 package.path = here .. "/?.lua;" .. package.path
 local Mock = require("mock_reaper")

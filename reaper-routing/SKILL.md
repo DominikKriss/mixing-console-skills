@@ -89,8 +89,8 @@ reopening the project. Every row (track, item position, level, size) has a check
 the ones Remove takes out; untick a row to keep that take. **Remove** takes the ticked items out in one undo step; the **Also delete the WAV files** checkbox (off by
 default) also deletes their files when no take left in this project uses them. It checks only the open project:
 if another project uses the same WAV files (a copy of the project pointing at the same `Media` folder), deleting
-breaks it, so warn the user and suggest a backup first. Items with several takes and takes whose file can't be read
-are skipped and counted, and Remove refuses if the project changed after the scan. After deleting,
+breaks it, so warn the user and suggest a backup first. Items with several takes (Record: add new takes) are left alone, since removing the item would delete its
+other takes too, and takes whose file can't be read are skipped; both are counted in the window, and Remove refuses if the project changed after the scan. After deleting,
 tell the user to save right away. If Windows keeps a file open, the window says so; then save and use File > Clean
 current project directory.
 

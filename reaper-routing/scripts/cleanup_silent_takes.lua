@@ -64,7 +64,9 @@ end
 
 function M.skipped_note(ctx)
   local notes = {}
-  if ctx.multi > 0 then notes[#notes + 1] = string.format("%d items with several takes skipped", ctx.multi) end
+  if ctx.multi > 0 then
+    notes[#notes + 1] = string.format("%d items with more than one take left alone (removing one removes all its takes)", ctx.multi)
+  end
   if ctx.unreadable > 0 then notes[#notes + 1] = string.format("%d takes skipped: file can't be read", ctx.unreadable) end
   return table.concat(notes, ", ")
 end
@@ -230,7 +232,7 @@ function M.run()
   local ctx = M.collect(db)
   if #ctx.takes == 0 then
     local note = M.skipped_note(ctx)
-    reaper.ShowMessageBox(note ~= "" and ("No audio takes to check: " .. note .. ".") or "The project has no audio takes.", TITLE, 0)
+    reaper.ShowMessageBox(note ~= "" and ("Nothing to check: " .. note .. ".") or "The project has no audio takes.", TITLE, 0)
     return
   end
 

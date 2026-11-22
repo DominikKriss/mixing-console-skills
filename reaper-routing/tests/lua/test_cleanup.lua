@@ -67,7 +67,7 @@ test("cleanup: item with a silent active take and an audible inactive take is sk
   eq(P.items[1], multi, "multi-take item kept")
   truthy(exists(silent.src.file) and exists(loud.src.file), "multi-take files kept")
   truthy(not exists(single.takes[1].src.file), "single-take silent file deleted")
-  truthy(M.skipped_note(ctx):find("1 items with several takes skipped", 1, true), "note")
+  truthy(M.skipped_note(ctx):find("1 items with more than one take left alone", 1, true), "note")
 end)
 
 test("cleanup: a file another take still uses is not deleted", function()

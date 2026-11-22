@@ -76,8 +76,8 @@ for a root source), `GetMediaItemInfo_Value` (`D_POSITION`), `format_timestr`, `
   stops if another project became active and skips a take `ValidatePtr2` no longer accepts (its item deleted). Every candidate has
   its own checkbox, ticked by default. Covered by `tests/lua/test_cleanup.lua` against the REAPER mock.
   Confirmed by the owner in REAPER on Windows (2026-11-22): an item deleted during the scan is skipped without
-  errors, Remove works on an unchanged project, an unticked row is kept. The multi-take skip is **not yet run in
-  REAPER** (mock test only).
+  errors, Remove works on an unchanged project, an unticked row is kept. Multi-take skip confirmed the same day: items
+  recorded with several takes were left alone, a single-take silent item next to them was removed.
 - File names come from the parent source when there is one (`GetMediaSourceParent`), so section and reversed
   takes resolve to their WAV file.
 - A file is deleted only when no take of any remaining item (active or not) uses it. Windows refuses to delete a file REAPER still has open;
